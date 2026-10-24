@@ -2,11 +2,11 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache2.0-blue.svg)](LICENSE)
 [![.NET 10.0](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
-[![Client for InstantAIGate](https://img.shields.io/badge/Client%20for-InstantAIGate-007acc.svg)](https://github.com/your-org/InstantAIGate)
+[![Client for InstantAIGate](https://img.shields.io/badge/Client%20for-InstantAIGate-007acc.svg)](https://github.com/Instancium/instant-ai-gate)
 
 **Autonomous TUI tool for .NET release automation with AI-powered commit messages and changelogs.**
 
-Instancium Publisher eliminates the friction between writing code and shipping releases. It orchestrates Git workflows, semantic versioning, and publishing pipelines — all backed by real-time LLM inference through [InstantAIGate](https://github.com/your-org/InstantAIGate).
+Instancium Publisher eliminates the friction between writing code and shipping releases. It orchestrates Git workflows, semantic versioning, and publishing pipelines — all backed by real-time LLM inference through [InstantAIGate](https://github.com/Instancium/instant-ai-gate).
 
 ---
 
