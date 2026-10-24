@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -105,6 +106,28 @@ public sealed class MainTuiOrchestrator
         return true;
     }
 
+    private void RenderHeader()
+    {
+        string version = GetAppVersion();
+        AnsiConsole.Write(new Rule($"[bold blue]Instancium.Publisher CLI[/] [dim]v{Markup.Escape(version)}[/]").LeftJustified());
+    }
+
+    private static string GetAppVersion()
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(informational))
+        {
+            int plusIndex = informational.IndexOf('+');
+            return plusIndex >= 0 ? informational[..plusIndex] : informational;
+        }
+        var nameVersion = assembly.GetName().Version;
+        return nameVersion != null
+            ? $"{nameVersion.Major}.{nameVersion.Minor}.{nameVersion.Build}"
+            : "0.0.0";
+    }
+
     private static void RenderFatalConfigurationError(string reason, string hint)
     {
         AnsiConsole.Clear();
@@ -181,10 +204,6 @@ public sealed class MainTuiOrchestrator
         return true;
     }
 
-    private void RenderHeader()
-    {
-        AnsiConsole.Write(new Rule("[bold blue]Instancium.Publisher CLI[/]").LeftJustified());
-    }
 
     private async Task RenderDashboardAsync(CancellationToken ct)
     {
