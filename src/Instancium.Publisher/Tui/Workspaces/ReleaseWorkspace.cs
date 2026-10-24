@@ -163,6 +163,7 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
                     await _publishStep.ExecuteAsync(activeContext, "main", ct);
                     await _gitService.CheckoutBranchAsync(activeContext.SourceBranch, false, ct);
                     await _gitService.DeleteLocalBranchAsync(activeContext.ReleaseBranch, ct);
+                    await _gitService.DeleteRemoteBranchAsync(activeContext.ReleaseBranch, ct);
                 });
 
                 AnsiConsole.MarkupLine($"\n[bold green]Release v{activeContext.NewVersion} published successfully![/]");
@@ -303,10 +304,11 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             if (!string.IsNullOrEmpty(context.ReleaseBranch))
             {
                 await _gitService.DeleteLocalBranchAsync(context.ReleaseBranch, ct);
+                await _gitService.DeleteRemoteBranchAsync(context.ReleaseBranch, ct);
             }
 
             await _stateManager.RollbackAsync();
-            Spectre.Console.AnsiConsole.MarkupLine("[green]Local changes discarded and pipeline state cleared.[/]");
+            AnsiConsole.MarkupLine("[green]Local changes discarded and pipeline state cleared.[/]");
         }
         catch (Exception ex)
         {

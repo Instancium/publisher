@@ -22,6 +22,7 @@ public sealed class GitService : IGitService
         _projectContext = projectContext ?? throw new ArgumentNullException(nameof(projectContext));
     }
 
+
     /// <summary>
     /// Checks whether the working directory contains uncommitted modifications.
     /// </summary>
@@ -116,6 +117,28 @@ public sealed class GitService : IGitService
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
         {
+        }
+    }
+
+    public async Task DeleteRemoteBranchAsync(string branchName, CancellationToken ct = default)
+    {
+        var errorBuilder = new StringBuilder();
+        int exitCode = await _processRunner.ExecuteAsync(
+            "git",
+            $"push origin --delete {branchName}",
+            _projectContext.WorkingDirectory,
+            null,
+            msg => errorBuilder.AppendLine(msg),
+            ct);
+        if (exitCode != 0)
+        {
+            string error = errorBuilder.ToString();
+            if (!error.Contains("remote ref does not exist", StringComparison.OrdinalIgnoreCase) &&
+                !error.Contains("couldn't find remote ref", StringComparison.OrdinalIgnoreCase) &&
+                !error.Contains("unable to delete", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Failed to delete remote branch '{branchName}'. Exit code: {exitCode}. Error: {error}");
+            }
         }
     }
 
