@@ -1,0 +1,54 @@
+﻿+--- Commands
+|    +--- CommitCommand.cs
+|    +--- ReleaseCommand.cs
+|    \--- VersionControlCommand.cs
++--- Configuration
+|    \--- PublisherSettings.cs
++--- Core
+|    +--- Domain
+|    |    +--- SemanticVersion.cs
+|    |    \--- VersionBumpStrategy.cs
+|    \--- Interfaces
+|         +--- IAiCommitAssistant.cs
+|         +--- IGitService.cs
+|         +--- IPipelineStateManager.cs
+|         +--- IProcessExecutionService.cs
+|         +--- ITuiWorkspace.cs
+|         \--- IVersionEngine.cs
++--- Pipeline
+|    \--- Steps
+|         +--- BumpVersionStep.cs
+|         +--- GenerateCommitMessageStep.cs
+|         +--- GitAddAllStep.cs
+|         +--- GitCommitAndPushStep.cs
+|         +--- MergeAndPublishStep.cs
+|         \--- RunUnitTestsStep.cs
++--- Properties
+|    \--- PublishProfiles
+|         +--- FolderProfile.pubxml
+|         \--- FolderProfile.pubxml.user
++--- Services
+|    +--- Ai
+|    |    \--- SignalRAiCommitAssistant.cs
+|    +--- Git
+|    |    \--- GitService.cs
+|    +--- System
+|    |    \--- ProcessRunner.cs
+|    \--- Versioning
+|         \--- VersionEngine.cs
++--- State
+|    +--- PipelineContext.cs
+|    +--- PipelineStateManager.cs
+|    \--- ProjectContext.cs
++--- Tui
+|    +--- Workspaces
+|    |    +--- CommitWorkspace.cs
+|    |    \--- ReleaseWorkspace.cs
+|    +--- CliMarkup.cs
+|    \--- MainTuiOrchestrator.cs
++--- appsettings.json
++--- Instancium.Publisher.csproj
++--- Instancium.Publisher.csproj.user
++--- Program.cs
++--- project_structure.txt
+\--- Show-Structure.ps1
