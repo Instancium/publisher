@@ -21,8 +21,8 @@
 [CmdletBinding()]
 param(
     [string] $Configuration = 'Release',
-    [string] $InstallDir = 'C:\ProgramData\Instancium\InstantPublisher',
-    [string] $ProjectPath = (Join-Path $PSScriptRoot 'src\InstantPublisher\InstantPublisher.csproj')
+    [string] $InstallDir = 'C:\ProgramData\Instancium\Publisher',
+    [string] $ProjectPath = (Join-Path $PSScriptRoot 'src\Instancium.Publisher\Instancium.Publisher.csproj')
 )
 
 Set-StrictMode -Version Latest
@@ -44,7 +44,7 @@ if (-not $dotnetCommand) {
     throw "dotnet CLI not found in PATH. Install the .NET 10 SDK first."
 }
 
-$stagingDir = Join-Path ([System.IO.Path]::GetTempPath()) ("InstantPublisher_publish_" + [System.Guid]::NewGuid().ToString('N'))
+$stagingDir = Join-Path ([System.IO.Path]::GetTempPath()) ("InstanciumPublisher_publish_" + [System.Guid]::NewGuid().ToString('N'))
 
 Write-Step "Publishing project ($Configuration) to staging: $stagingDir"
 & dotnet publish $ProjectPath -c $Configuration -o $stagingDir --nologo -v minimal
