@@ -11,6 +11,7 @@ public interface IGitService
     Task<string> GetCachedDiffStatAsync(CancellationToken ct = default);
     Task CommitAsync(string message, CancellationToken ct = default);
     Task<string> GetCurrentBranchAsync(CancellationToken ct = default);
+    Task<string> GetRepositoryRootAsync(CancellationToken ct = default);
     Task CheckoutBranchAsync(string branchName, bool createNew = false, CancellationToken ct = default);
     Task PushBranchAsync(string branchName, bool force = false, CancellationToken ct = default);
     Task FetchAllAsync(CancellationToken ct = default);

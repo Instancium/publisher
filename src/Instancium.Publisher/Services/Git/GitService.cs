@@ -83,6 +83,12 @@ public sealed class GitService : IGitService
         => _processRunner.GetOutputAsync("git", "branch --show-current", _projectContext.WorkingDirectory, ct);
 
     /// <summary>
+    /// Returns the absolute path of the git repository root directory.
+    /// </summary>
+    public Task<string> GetRepositoryRootAsync(CancellationToken ct = default)
+        => _processRunner.GetOutputAsync("git", "rev-parse --show-toplevel", _projectContext.WorkingDirectory, ct);
+
+    /// <summary>
     /// Switches branches, optionally creating a new one.
     /// </summary>
     public Task CheckoutBranchAsync(string branchName, bool createNew = false, CancellationToken ct = default)

@@ -35,6 +35,7 @@ internal static class Program
                 services.AddSingleton<IVersionEngine, VersionEngine>();
                 services.AddSingleton<IPipelineStateManager, PipelineStateManager>();
                 services.AddSingleton<IAiCommitAssistant, SignalRAiCommitAssistant>();
+                services.AddSingleton<IProjectDiscoveryService, ProjectDiscoveryService>();
 
                 services.AddTransient<BumpVersionStep>();
                 services.AddTransient<GenerateCommitMessageStep>();
