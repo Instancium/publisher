@@ -1,9 +1,9 @@
-﻿
-
-using Instancium.Publisher.Core.Domain;
+﻿using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Core.Exceptions;
 using Instancium.Publisher.Core.Interfaces;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace Instancium.Publisher.Services.Versioning;
@@ -50,7 +50,8 @@ public sealed class VersionEngine : IVersionEngine
 
     public async Task<ProjectVersionSnapshot> ReadProjectVersionAsync(string projectPath, CancellationToken ct = default)
     {
-        XElement? versionElement = await ReadVersionElementAsync(projectPath, ct);
+        XDocument document = await LoadDocumentAsync(projectPath, ct);
+        XElement? versionElement = document.Root?.Descendants("Version").FirstOrDefault();
         SemanticVersion? declaredVersion = string.IsNullOrWhiteSpace(versionElement?.Value)
             ? null
             : Parse(versionElement.Value);
@@ -83,40 +84,41 @@ public sealed class VersionEngine : IVersionEngine
         }
     }
 
-    private static async Task<XElement?> ReadVersionElementAsync(string projectPath, CancellationToken ct)
+    private static async Task<XDocument> LoadDocumentAsync(string projectPath, CancellationToken ct)
     {
         if (!File.Exists(projectPath))
         {
             throw new FileNotFoundException($"Project file not found: '{projectPath}'.", projectPath);
         }
-        await using var stream = new FileStream(projectPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
-        var document = await XDocument.LoadAsync(stream, LoadOptions.None, ct);
-        return document.Root?.Descendants("Version").FirstOrDefault();
+
+        try
+        {
+            await using var stream = new FileStream(projectPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+            return await XDocument.LoadAsync(stream, LoadOptions.None, ct);
+        }
+        catch (XmlException ex)
+        {
+            throw new ProjectFileParseException(projectPath, ex.Message, ex);
+        }
     }
 
-    private static async Task WriteVersionToProjectInternalAsync(
-        string projectPath,
-        SemanticVersion version,
-        CancellationToken ct)
+    private static async Task WriteVersionToProjectInternalAsync(string projectPath, SemanticVersion version, CancellationToken ct)
     {
-        if (!File.Exists(projectPath))
+        XDocument document = await LoadDocumentAsync(projectPath, ct);
+        XElement? root = document.Root;
+        if (root is null)
         {
-            throw new FileNotFoundException($"Project file not found: '{projectPath}'.", projectPath);
+            throw new ProjectFileParseException(projectPath, "XML document has no root element.");
         }
-        XDocument document;
-        await using (var readStream = new FileStream(projectPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true))
-        {
-            document = await XDocument.LoadAsync(readStream, LoadOptions.None, ct);
-        }
-        var root = document.Root ?? throw new InvalidOperationException("Project file contains no XML root.");
-        var versionElement = root.Descendants("Version").FirstOrDefault();
+
+        XElement? versionElement = root.Descendants("Version").FirstOrDefault();
         if (versionElement != null)
         {
             versionElement.Value = version.ToString();
         }
         else
         {
-            var propertyGroup = root.Element("PropertyGroup");
+            XElement? propertyGroup = root.Element("PropertyGroup");
             if (propertyGroup == null)
             {
                 propertyGroup = new XElement("PropertyGroup");
@@ -124,6 +126,7 @@ public sealed class VersionEngine : IVersionEngine
             }
             propertyGroup.Add(new XElement("Version", version.ToString()));
         }
+
         await using var writeStream = new FileStream(projectPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
         await document.SaveAsync(writeStream, SaveOptions.None, ct);
     }

@@ -1,6 +1,7 @@
 namespace Instancium.Publisher.Tui.Workspaces;
 
 using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Core.Exceptions;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Pipeline.Steps;
 using Instancium.Publisher.State;
@@ -168,10 +169,10 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
                 Console.ReadKey(intercept: true);
             }
         }
-        catch (Exception ex)
+        catch (ProjectFileParseException ex)
         {
             AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
-            AnsiConsole.MarkupLine("[dim]Your progress has been saved. You can resume or rollback later.[/]");
+            AnsiConsole.MarkupLine("[yellow]Fix the file above: resolve merge conflicts, repair encoding, or restore it via 'git checkout -- <file>'. Then choose Resume.[/]");
             await _stateManager.SaveAsync(activeContext);
             AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
             Console.ReadKey(intercept: true);
