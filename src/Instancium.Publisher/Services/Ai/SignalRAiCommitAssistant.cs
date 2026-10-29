@@ -29,7 +29,11 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly ConcurrentDictionary<string, Channel<string>> _activeChannels = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _activeCompletions = new();
-    private readonly ConcurrentDictionary<string, bool> _joinedSessions = new();
+    /// <summary>
+    /// Tracks sessions for which JoinSession was invoked on the CURRENT connection.
+    /// Cleared on Reconnected (new ConnectionId requires re-join) and on Dispose.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, bool> _boundSessions = new();
     private readonly IProgressReporter _progressReporter;
 
     private static readonly HashSet<string> IgnoredExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -77,7 +81,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     {
         connection.Closed += ex =>
         {
-            _joinedSessions.Clear();
+            _boundSessions.Clear();
             var error = ex ?? new InvalidOperationException("Underlying transport connection was closed.");
             AbortAllActiveStreams(error);
             return Task.CompletedTask;
@@ -87,6 +91,15 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         {
             var error = ex ?? new InvalidOperationException("Connection interrupted. Reconnecting...");
             AbortAllActiveStreams(error);
+            return Task.CompletedTask;
+        };
+
+        // CRITICAL: After automatic reconnect, SignalR assigns a NEW ConnectionId.
+        // We must clear _boundSessions so that the next StreamChatAsync call re-invokes JoinSession,
+        // which updates BoundConnectionId on the server. Without this, sessions remain bound to the OLD (dead) ConnectionId.
+        connection.Reconnected += connectionId =>
+        {
+            _boundSessions.Clear();
             return Task.CompletedTask;
         };
 
@@ -182,7 +195,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
                 await _hubConnection.DisposeAsync();
             }
 
-            _joinedSessions.Clear();
+            _boundSessions.Clear();
 
             _hubConnection = new HubConnectionBuilder()
                 .WithUrl(_hubUrl, options =>
@@ -253,12 +266,12 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
 
                 try
                 {
-                    if (!_joinedSessions.ContainsKey(sessionId))
+                    if (!_boundSessions.ContainsKey(sessionId))
                     {
                         await connection.InvokeAsync("JoinSession", sessionId, repoId ?? string.Empty, ct);
-                        _joinedSessions.TryAdd(sessionId, true);
-
-                        await connection.InvokeAsync("MarkSessionAsEphemeral", sessionId, ct);
+                        _boundSessions.TryAdd(sessionId, true);
+                        // MarkSessionAsEphemeral removed: all sessions now share unified lifecycle
+                        // with grace period and idle timeout managed by SessionInferenceManager.
                     }
 
                     await connection.SendAsync("SendPromptDelta", sessionId, deltaMessage, ct);
@@ -274,7 +287,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
                 }
                 catch (Exception ex) when (!yieldedAny && attempt < maxAttempts && (ex.Message.Contains("not active", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("was not found", StringComparison.OrdinalIgnoreCase)))
                 {
-                    _joinedSessions.TryRemove(sessionId, out _);
+                    _boundSessions.TryRemove(sessionId, out _);
                     retryNeeded = true;
                 }
                 finally
@@ -320,13 +333,13 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
 
     private async Task DestroySessionAsync(string sessionId, CancellationToken ct)
     {
-        _joinedSessions.TryRemove(sessionId, out _);
+        _boundSessions.TryRemove(sessionId, out _);
         if (_hubConnection != null)
         {
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(2));
+                cts.CancelAfter(TimeSpan.FromSeconds(5));
                 await _hubConnection.InvokeAsync("DestroySession", sessionId, cts.Token);
             }
             catch
@@ -926,11 +939,13 @@ YOUR TURN (Generate ONLY the commit message):
     public async ValueTask DisposeAsync()
     {
         _connectionLock.Dispose();
-        var sessionsToDestroy = _joinedSessions.Keys.ToList();
+        var sessionsToDestroy = _boundSessions.Keys.ToList();
         foreach (var sessionId in sessionsToDestroy)
         {
             await DestroySessionAsync(sessionId, CancellationToken.None);
         }
+
+        _boundSessions.Clear();
 
         if (_hubConnection != null)
         {
