@@ -858,6 +858,7 @@ YOUR TURN (Generate ONLY the commit message):
         // 1. Remove common AI hallucinations/placeholders for empty body
         string cleaned = rawMessage
             .Replace("<no-body>", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("</no-body>", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("[no-body]", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("(no body)", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("No body provided.", string.Empty, StringComparison.OrdinalIgnoreCase);
