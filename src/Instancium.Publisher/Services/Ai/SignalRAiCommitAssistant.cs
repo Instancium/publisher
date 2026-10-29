@@ -439,7 +439,31 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         {
             sb.Append(token);
         }
-        return SanitizeCommitMessage(sb.ToString());
+
+        string rawMessage = sb.ToString();
+        string sanitized = SanitizeCommitMessage(rawMessage);
+
+        // FALLBACK STRATEGY:
+        // If the model (especially small 4B ones) failed to generate a body despite our prompt,
+        // we construct a minimal valid body from the diffStat to ensure the commit isn't empty.
+        if (!string.IsNullOrWhiteSpace(sanitized) && !sanitized.Contains('\n'))
+        {
+            // It's a single line (title only). Let's append a generic body based on stats.
+            var statsLines = diffStat.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            if (statsLines.Length > 0)
+            {
+                sanitized += Environment.NewLine + Environment.NewLine;
+                // Take top 3 changed files as a summary if body is missing
+                var summaryFiles = statsLines.Take(3).Select(l => l.Trim()).Where(l => !l.StartsWith(" "));
+                foreach (var file in summaryFiles)
+                {
+                    sanitized += $"- Update {file}" + Environment.NewLine;
+                }
+                sanitized = sanitized.TrimEnd();
+            }
+        }
+
+        return sanitized;
     }
 
     public async IAsyncEnumerable<string> StreamReleaseNotesAsync(
@@ -646,37 +670,43 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         string fileListText = BuildCompactFileRegistry(fileStatuses);
         string compactDiffStat = CompressDiffStat(diffStat);
         string statSection = string.IsNullOrWhiteSpace(compactDiffStat) ? string.Empty : $"""
-            DIFF VOLUME STATISTICS:
-            {compactDiffStat}
-            """;
+DIFF VOLUME STATISTICS:
+{compactDiffStat}
+""";
+
+        // OPTIMIZATION FOR SMALLER MODELS (4B-8B):
+        // 1. Simplified instructions.
+        // 2. Explicit "Example" block (Few-Shot Prompting) is critical for small models to follow format.
+        // 3. Stronger negative constraints against placeholders.
 
         return $"""
-            You are an expert developer generating a Conventional Commit message. Strictly adhere to the provided file statuses, diff volume statistics, and context.
-            
-            FILE CHANGE OVERVIEW:
-            {fileListText}
-            
-            {statSection}
-            
-            RULES:
-            1. MUST be exclusively in English.
-            2. First line (Title): Format as type(scope): description.
-               - HARD LIMIT: Target 50-65 characters. Absolute maximum is 72 characters.
-               - Be concise, direct, and imperative (e.g., 'feat(server): add startup worker tests').
-            3. CRITICAL STATUS ACCURACY RULES:
-               - NEVER label a file as 'created', 'introduced', or 'added' if its status is [MODIFIED]. Use verbs like 'update', 'refactor', 'enhance', 'fix'.
-               - ONLY treat files with status [ADDED] as newly created files.
-               - Files with status [DELETED] must be described as removed or deleted.
-               - Files with status [RENAMED] must be described as renamed or moved.
-            4. FILE TYPE AND SCOPE RULE:
-               - If ONLY documentation files (.md, .txt) are changed, type MUST be 'docs'.
-               - Derive the primary scope from the most affected module indicated in the overview.
-            5. Second line: MUST be completely blank.
-            6. Third line onwards (Body): Provide a concise bulleted list detailing WHAT was changed, preserving exact file statuses.
-            
-            Context:
-            {aggregatedContext}
-            """;
+You are an expert developer generating a Conventional Commit message.
+INPUT DATA:
+{fileListText}
+{statSection}
+CONTEXT:
+{aggregatedContext}
+
+INSTRUCTIONS:
+1. LANGUAGE: English ONLY.
+2. FORMAT:
+   - Line 1: type(scope): description (Max 72 chars). Imperative mood.
+   - Line 2: EMPTY.
+   - Line 3+: Bullet points describing changes.
+3. CRITICAL RULES:
+   - DO NOT use placeholders like "<no-body>" or "No changes".
+   - If details are sparse, summarize the file changes based on the INPUT DATA.
+   - NEVER say a file was "added" if status is [MODIFIED].
+
+EXAMPLE OUTPUT:
+feat(auth): implement jwt refresh token logic
+
+- Add RefreshToken method to AuthService
+- Update User model with token expiry field
+- Modify login endpoint to return refresh token
+
+YOUR TURN (Generate ONLY the commit message):
+""";
     }
 
     private static bool IsGeneratedOrBinary(string filePath)
@@ -824,28 +854,71 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     private static string SanitizeCommitMessage(string rawMessage)
     {
         if (string.IsNullOrWhiteSpace(rawMessage)) return rawMessage;
-        var lines = rawMessage.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
-        string title = lines[0].Trim();
+
+        // 1. Remove common AI hallucinations/placeholders for empty body
+        string cleaned = rawMessage
+            .Replace("<no-body>", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("[no-body]", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("(no body)", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("No body provided.", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        var lines = cleaned.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
+
+        // Filter out empty lines at the start to find the real title
+        var contentLines = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+
+        if (contentLines.Count == 0) return string.Empty;
+
+        string title = contentLines[0].Trim();
+
+        // Enforce Conventional Commit Title Length
         const int maxHeaderLength = 72;
         const int truncateAt = 69;
         if (title.Length > maxHeaderLength)
         {
             title = string.Concat(title.AsSpan(0, truncateAt), "...");
         }
-        if (lines.Length <= 1) return title;
-        var bodyLines = lines.Skip(1).ToList();
-        while (bodyLines.Count > 0 && string.IsNullOrWhiteSpace(bodyLines[0]))
+
+        // If only title exists (model failed to generate body), return just title.
+        // The caller or a fallback mechanism should handle adding a default body if needed.
+        if (contentLines.Count <= 1) return title;
+
+        // Process Body
+        // Skip the first line (title) and any immediate empty lines
+        var bodyLines = contentLines.Skip(1).ToList();
+
+        // Remove trailing empty lines
+        while (bodyLines.Count > 0 && string.IsNullOrWhiteSpace(bodyLines[^1]))
         {
-            bodyLines.RemoveAt(0);
+            bodyLines.RemoveAt(bodyLines.Count - 1);
         }
+
         if (bodyLines.Count == 0) return title;
+
         var builder = new StringBuilder();
         builder.AppendLine(title);
-        builder.AppendLine();
-        for (int i = 0; i < bodyLines.Count; i++)
+        builder.AppendLine(); // Mandatory blank line between title and body
+
+        foreach (var line in bodyLines)
         {
-            builder.AppendLine(bodyLines[i]);
+            // Clean up individual body lines (remove accidental markdown fences if any)
+            string cleanLine = line.TrimStart('`', '*', '-').Trim();
+            if (!string.IsNullOrWhiteSpace(cleanLine))
+            {
+                // Ensure bullet points are formatted correctly if the model outputted raw text
+                if (!cleanLine.StartsWith("- ") && !cleanLine.StartsWith("* "))
+                {
+                    // Heuristic: if it looks like a list item but missed the bullet, add it? 
+                    // For now, just preserve what the model gave, but clean whitespace.
+                    builder.AppendLine($"- {cleanLine}");
+                }
+                else
+                {
+                    builder.AppendLine(cleanLine);
+                }
+            }
         }
+
         return builder.ToString().TrimEnd();
     }
 
