@@ -116,6 +116,12 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
                     {
                         return;
                     }
+
+            
+                    activeContext.CurrentVersion = repositoryVersion;
+                    activeContext.NewVersion = repositoryVersion is null
+                        ? RepositoryVersionPolicy.CalculateInitialVersion(strategy.Value, customVersionString: customVersion)
+                        : _versionEngine.CalculateNext(repositoryVersion, strategy.Value, customVersionString: customVersion);
                 }
                 else
                 {
@@ -128,15 +134,16 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
                     activeContext.SourceBranch = await _gitService.GetCurrentBranchAsync(ct);
                 }
 
+                activeContext.ReleaseBranch = $"release-prep/v{activeContext.NewVersion}";
+                await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
+
+
                 await AnsiConsole.Status().StartAsync("Bumping repository version...", async ctx =>
                 {
                     await _bumpStep.ExecuteAsync(activeContext, snapshots, strategy, customVersion, ct);
                 });
 
                 AnsiConsole.MarkupLine($"[green]Repository version set to v{activeContext.NewVersion} across {projectPaths.Count} project(s).[/]");
-
-                activeContext.ReleaseBranch = $"release-prep/v{activeContext.NewVersion}";
-                await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
 
                 activeContext.CurrentStep = 2;
                 await _stateManager.SaveAsync(activeContext);
