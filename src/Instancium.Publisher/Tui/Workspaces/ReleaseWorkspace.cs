@@ -53,41 +53,62 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
     public async Task ExecuteAsync(CancellationToken ct = default)
     {
         var activeContext = await _stateManager.LoadAsync();
+
         if (activeContext != null && activeContext.CurrentStep > 0)
         {
             AnsiConsole.MarkupLine($"[yellow]Interrupted release detected at step {activeContext.CurrentStep}.[/]");
+
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
                     .Title("Recovery Dispatcher:")
                     .AddChoices("Resume", "Rollback", "Start Fresh"));
+
             if (choice == "Rollback")
             {
                 await ExecuteDestructiveRollbackAsync(activeContext, ct);
                 return;
             }
+
             if (choice == "Start Fresh")
             {
                 await ExecuteDestructiveRollbackAsync(activeContext, ct);
                 activeContext = null;
             }
         }
+
         activeContext ??= new PipelineContext { CurrentStep = 1 };
+
         try
         {
+            // Restore contextual branch if resuming from step 2 or 3
+            if (activeContext.CurrentStep > 1 && !string.IsNullOrWhiteSpace(activeContext.ReleaseBranch))
+            {
+                string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
+                if (!string.Equals(currentBranch, activeContext.ReleaseBranch, StringComparison.OrdinalIgnoreCase))
+                {
+                    AnsiConsole.MarkupLine($"[dim]Restoring context: checking out {Markup.Escape(activeContext.ReleaseBranch)}...[/]");
+                    await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
+                }
+            }
+
             if (activeContext.CurrentStep <= 1)
             {
                 string repositoryRoot = await _gitService.GetRepositoryRootAsync(ct);
                 IReadOnlyList<string> projectPaths = await _projectDiscovery.DiscoverProjectFilesAsync(repositoryRoot, ct);
+
                 if (projectPaths.Count == 0)
                 {
                     throw new FileNotFoundException($"No .csproj project files found under repository root: {repositoryRoot}");
                 }
+
                 IReadOnlyList<ProjectVersionSnapshot> snapshots = await _versionEngine.ReadProjectVersionsAsync(projectPaths, ct);
                 SemanticVersion? repositoryVersion = RepositoryVersionPolicy.TryResolveCurrentVersion(snapshots);
+
                 RenderContextPanel(repositoryVersion, snapshots, repositoryRoot);
 
                 VersionBumpStrategy? strategy = null;
                 string? customVersion = null;
+
                 if (activeContext.NewVersion is null)
                 {
                     (strategy, customVersion) = PromptVersionStrategy();
@@ -111,60 +132,83 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
                 {
                     await _bumpStep.ExecuteAsync(activeContext, snapshots, strategy, customVersion, ct);
                 });
+
                 AnsiConsole.MarkupLine($"[green]Repository version set to v{activeContext.NewVersion} across {projectPaths.Count} project(s).[/]");
 
                 activeContext.ReleaseBranch = $"release-prep/v{activeContext.NewVersion}";
                 await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
+
                 activeContext.CurrentStep = 2;
                 await _stateManager.SaveAsync(activeContext);
             }
+
             if (activeContext.CurrentStep <= 2)
             {
                 AnsiConsole.MarkupLine("\n[green]Generating Release Notes (AI Changelog):[/]");
                 AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
+
                 string lastTag = string.Empty;
                 try { lastTag = await _gitService.GetLatestTagAsync(ct); } catch { }
+
                 string rangeDescription = string.IsNullOrWhiteSpace(lastTag)
                     ? "last 20 commits (no tags found in repository)"
                     : $"{lastTag}..HEAD";
+
                 AnsiConsole.MarkupLine($"[dim]Changelog commit range: {Markup.Escape(rangeDescription)}[/]");
+
                 string gitLog = await _gitService.GetCommitLogAsync(lastTag, ct);
                 var fullNotesBuilder = new StringBuilder();
+
                 await foreach (var token in _aiAssistant.StreamReleaseNotesAsync(gitLog, ct))
                 {
                     CliMarkup.Print($"[silver]{Markup.Escape(token)}[/]");
                     fullNotesBuilder.Append(token);
                 }
+
                 AnsiConsole.WriteLine();
                 AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
+
                 string rawNotes = fullNotesBuilder.ToString().Trim();
                 activeContext.ReleaseNotes = SanitizeReleaseNotes(rawNotes);
+
                 var approveChoice = AnsiConsole.Prompt(
                     new SelectionPrompt<string>()
                         .Title("\nProceed with this release?")
                         .AddChoices("Approve and Publish", "Abort (Keep state)", "Rollback (Destroy branch)"));
+
                 if (approveChoice == "Abort (Keep state)") return;
+
                 if (approveChoice == "Rollback (Destroy branch)")
                 {
                     await ExecuteDestructiveRollbackAsync(activeContext, ct);
                     return;
                 }
+
                 activeContext.CurrentStep = 3;
                 await _stateManager.SaveAsync(activeContext);
             }
+
             if (activeContext.CurrentStep <= 3)
             {
                 await AnsiConsole.Status().StartAsync("Merging and publishing release to GitHub...", async ctx =>
                 {
-                    await _gitService.AddAllAsync(ct);
-                    await _gitService.CommitAsync($"chore(release): prepare version v{activeContext.NewVersion}", ct);
+                    // Ensure idempotency for resumes: only commit if there are staged/unstaged changes
+                    if (await _gitService.HasUncommittedChangesAsync(ct))
+                    {
+                        await _gitService.AddAllAsync(ct);
+                        await _gitService.CommitAsync($"chore(release): prepare version v{activeContext.NewVersion}", ct);
+                    }
+
                     await _publishStep.ExecuteAsync(activeContext, "main", ct);
+
                     await _gitService.CheckoutBranchAsync(activeContext.SourceBranch, false, ct);
                     await _gitService.DeleteLocalBranchAsync(activeContext.ReleaseBranch, ct);
                     await _gitService.DeleteRemoteBranchAsync(activeContext.ReleaseBranch, ct);
                 });
+
                 AnsiConsole.MarkupLine($"\n[bold green]Release v{activeContext.NewVersion} published successfully![/]");
                 await _stateManager.RollbackAsync();
+
                 AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
                 Console.ReadKey(intercept: true);
             }
@@ -174,6 +218,17 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
             AnsiConsole.MarkupLine("[yellow]Fix the file above: resolve merge conflicts, repair encoding, or restore it via 'git checkout -- <file>'. Then choose Resume.[/]");
             await _stateManager.SaveAsync(activeContext);
+
+            AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
+            Console.ReadKey(intercept: true);
+        }
+        catch (Exception ex)
+        {
+            // Global catch to prevent unhandled app crashes and state loss
+            AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
+            AnsiConsole.MarkupLine("[yellow]Pipeline state has been saved. If a merge failed, it was automatically aborted to protect your project files. You can safely choose 'Resume' after investigating the issue.[/]");
+            await _stateManager.SaveAsync(activeContext);
+
             AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
             Console.ReadKey(intercept: true);
         }
@@ -185,29 +240,35 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             .Select(s => new MenuOption(s))
             .ToList();
         choices.Add(new MenuOption(null));
+
         MenuOption optionChoice = AnsiConsole.Prompt(
             new SelectionPrompt<MenuOption>()
                 .Title("\n[cyan]Select version bump strategy (Use arrow keys):[/]")
                 .PageSize(12)
                 .AddChoices(choices)
                 .UseConverter(opt => FormatStrategyWithExample(opt.Strategy)));
+
         if (optionChoice.Strategy is null)
         {
             return (null, null);
         }
+
         if (optionChoice.Strategy != VersionBumpStrategy.Custom)
         {
             return (optionChoice.Strategy, null);
         }
+
         while (true)
         {
             string rawVersion = AnsiConsole.Prompt(
                 new TextPrompt<string>("Enter custom version (SemVer 2.0, empty to cancel):")
                     .AllowEmpty());
+
             if (string.IsNullOrWhiteSpace(rawVersion))
             {
                 return (null, null);
             }
+
             try
             {
                 return (VersionBumpStrategy.Custom, _versionEngine.Parse(rawVersion).ToString());
@@ -238,17 +299,21 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         {
             return string.Empty;
         }
+
         var lines = rawNotes.Replace("\r\n", "\n").Split('\n');
         var rebuilt = new List<string>();
         var headerBlock = new List<string>();
         var sectionEntries = new List<string>();
+
         foreach (string rawLine in lines)
         {
             string line = rawLine.Trim();
+
             if (line.Length == 0)
             {
                 continue;
             }
+
             if (IsBulletLine(line))
             {
                 if (!IsPlaceholderBullet(line))
@@ -257,14 +322,17 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
                 }
                 continue;
             }
+
             if (sectionEntries.Count > 0)
             {
                 FlushSection(rebuilt, headerBlock, sectionEntries);
                 headerBlock = new List<string>();
                 sectionEntries = new List<string>();
             }
+
             headerBlock.Add(line);
         }
+
         FlushSection(rebuilt, headerBlock, sectionEntries);
         return string.Join(Environment.NewLine, rebuilt).Trim();
     }
@@ -275,6 +343,7 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         {
             return;
         }
+
         target.AddRange(headerBlock);
         target.AddRange(sectionEntries);
         target.Add(string.Empty);
@@ -302,12 +371,15 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         string repositoryRoot)
     {
         int divergentProjects = RepositoryVersionPolicy.CountDivergentProjects(snapshots, repositoryVersion);
+
         string versionText = repositoryVersion is null
             ? "[yellow]none declared (initial baseline 1.0.0)[/]"
             : $"[bold green]{repositoryVersion}[/]";
+
         string divergentText = divergentProjects == 0
             ? "[dim green]none[/]"
             : $"[yellow]{divergentProjects} (will be aligned on release)[/]";
+
         var panel = new Panel(
             $"Active Project:      [bold white]{Markup.Escape(_projectContext.Name)}[/]\n" +
             $"Repository Root:     [dim]{Markup.Escape(repositoryRoot)}[/]\n" +
@@ -318,6 +390,7 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             .BorderColor(Color.Grey)
             .RoundedBorder()
             .Expand();
+
         AnsiConsole.Write(panel);
         AnsiConsole.WriteLine();
     }
@@ -328,6 +401,7 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         {
             return "Return to Menu          [dim]Exit to Main CLI[/]";
         }
+
         return strategy.Value switch
         {
             VersionBumpStrategy.Patch => "Patch                   [dim]1.0.0 ➔ 1.0.1[/]",
@@ -349,15 +423,18 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         try
         {
             await _gitService.RestoreAllAsync(ct);
+
             if (!string.IsNullOrEmpty(context.SourceBranch))
             {
                 await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
             }
+
             if (!string.IsNullOrEmpty(context.ReleaseBranch))
             {
                 await _gitService.DeleteLocalBranchAsync(context.ReleaseBranch, ct);
                 await _gitService.DeleteRemoteBranchAsync(context.ReleaseBranch, ct);
             }
+
             await _stateManager.RollbackAsync();
             AnsiConsole.MarkupLine("[green]Local changes discarded and pipeline state cleared.[/]");
         }

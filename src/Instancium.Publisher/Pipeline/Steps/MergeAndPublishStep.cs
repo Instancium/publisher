@@ -1,6 +1,10 @@
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.State;
 using System.Text;
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Instancium.Publisher.Pipeline.Steps;
 
@@ -23,34 +27,46 @@ public class MergeAndPublishStep
         {
             throw new InvalidOperationException("New version is not set in the pipeline context.");
         }
+
         if (string.IsNullOrWhiteSpace(context.ReleaseBranch))
         {
             throw new InvalidOperationException("Release branch is not specified in the pipeline context.");
         }
+
         string versionTag = $"v{context.NewVersion}";
         string mergeMessage = $"chore: merge release {versionTag}";
+
         await _gitService.CheckoutBranchAsync(targetBranch, false, ct);
+
         var pullErrorBuilder = new StringBuilder();
         int pullExitCode = await _processService.ExecuteAsync(
             "git", $"pull origin {targetBranch}", string.Empty, null, msg => pullErrorBuilder.AppendLine(msg), ct);
+
         if (pullExitCode != 0)
         {
             throw new InvalidOperationException($"Failed to pull latest changes for {targetBranch}. Exit code: {pullExitCode}.\nError: {pullErrorBuilder}");
         }
+
         var mergeErrorBuilder = new StringBuilder();
         int mergeExitCode = await _processService.ExecuteAsync(
             "git", $"merge --no-ff {context.ReleaseBranch} -m \"{mergeMessage}\"", string.Empty, null, msg => mergeErrorBuilder.AppendLine(msg), ct);
+
         if (mergeExitCode != 0)
         {
-            throw new InvalidOperationException($"Merge failed with conflicts or errors. Exit code: {mergeExitCode}.\nError: {mergeErrorBuilder}");
+            // Abort the merge to prevent conflict markers from destroying project files
+            await _processService.ExecuteAsync("git", "merge --abort", string.Empty, null, null, ct);
+            throw new InvalidOperationException($"Merge failed with conflicts or errors. The merge was aborted to protect your workspace. Exit code: {mergeExitCode}.\nError: {mergeErrorBuilder}");
         }
+
         await _gitService.TagAndPushAsync(versionTag, ct);
         await _gitService.PushBranchAsync(targetBranch, force: false, ct);
+
         if (!string.Equals(context.SourceBranch, targetBranch, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(context.SourceBranch))
         {
             await _progressReporter.ReportAsync($"Backporting release {versionTag} to {context.SourceBranch}...", ct);
             await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
+
             var backportErrorBuilder = new StringBuilder();
             int backportExitCode = await _processService.ExecuteAsync(
                 "git",
@@ -59,12 +75,17 @@ public class MergeAndPublishStep
                 null,
                 msg => backportErrorBuilder.AppendLine(msg),
                 ct);
+
             if (backportExitCode != 0)
             {
-                throw new InvalidOperationException($"Backport merge failed. Exit code: {backportExitCode}.\nError: {backportErrorBuilder}");
+                // Abort the backport merge on failure
+                await _processService.ExecuteAsync("git", "merge --abort", string.Empty, null, null, ct);
+                throw new InvalidOperationException($"Backport merge failed. The merge was aborted. Exit code: {backportExitCode}.\nError: {backportErrorBuilder}");
             }
+
             await _gitService.PushBranchAsync(context.SourceBranch, force: false, ct);
         }
+
         await CreateGitHubReleaseAsync(versionTag, context.ReleaseNotes, context.NewVersion.IsPreRelease, ct);
     }
 
@@ -75,8 +96,6 @@ public class MergeAndPublishStep
         try
         {
             await File.WriteAllTextAsync(tempFilePath, notes, ct);
-
-            // 2. Append the --prerelease flag if the version requires it
             string preReleaseFlag = isPreRelease ? " --prerelease" : string.Empty;
             string arguments = $"release create {tag} -t \"Release {tag}\" -F \"{tempFilePath}\"{preReleaseFlag}";
 
