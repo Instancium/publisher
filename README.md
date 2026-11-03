@@ -162,6 +162,7 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 - **State Persistence**: Interrupted releases can be resumed or rolled back
 - **Ephemeral AI Sessions**: All inference sessions are marked ephemeral — KV-cache is released on disconnect
 - **Destructive Rollback**: Requires explicit user confirmation; performs `git reset --hard` and `git clean -fd`
+- **Deterministic Merge Strategy**: During release and backport operations, the pipeline automatically resolves any Git conflicts in favor of the incoming release branch. This ensures that the exact versions and file states prepared by the pipeline are enforced without manual intervention, while perfectly preserving the Git merge history graph.
 
 ## 🏗 Architecture Overview
 
