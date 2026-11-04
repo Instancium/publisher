@@ -588,14 +588,16 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
                - Follow with an empty line.
                - Then, output a Markdown table with exactly these columns: | Vector | Domain | Modification |
                - Followed by a separator: | :--- | :--- | :--- |
-            4. TABLE DATA RULES:
-               - 'Vector': Use exactly one of these strictly formatted tags (using monochrome geometric symbols): 
-                 ■ `Capability`
-                 ▲ `Resolution`
-                 ◆ `Refactoring`
-                 ● `Maintenance`
+            4. TABLE DATA RULES (CRITICAL):
+               - FACTUALITY FIRST: Map ONLY actual changes present in the aggregated log. DO NOT invent, hallucinate, or pad the table. DO NOT split a single atomic commit into multiple rows just to use different tags.
+               - It is expected and perfectly correct if the table contains only 1 row. Do NOT try to use every available vector tag.
+               - 'Vector': Select the SINGLE most appropriate tag for the change from this list: 
+                  `Capability`
+                  `Resolution`
+                  `Refactoring`
+                  `Maintenance`
                - 'Domain': Identify the specific architectural component or module affected (e.g., `SignalR`, `Pipeline`, `Core.Git`). Wrap it in inline code ticks (`).
-               - 'Modification': A concise, technical description of the change. Start with an uppercase letter, end with a period.
+               - 'Modification': A concise, technical description of the ACTUAL change. Start with an uppercase letter, end with a period.
             5. ABSOLUTELY IGNORE release engineering noise (version bumps, merges, chores related to release prep).
             6. Output ONLY valid Markdown. NO markdown fences (```). NO introductory or concluding text.
 
