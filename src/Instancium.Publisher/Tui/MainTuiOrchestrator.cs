@@ -20,16 +20,19 @@ public sealed class MainTuiOrchestrator
     private readonly IGitService _gitService;
     private readonly PublisherSettings _settings;
     private readonly ProjectContext _projectContext;
+    private readonly IEnvironmentInfoProvider _infoProvider;
 
     public MainTuiOrchestrator(
         IEnumerable<ITuiWorkspace> workspaces,
         IGitService gitService,
         IOptions<PublisherSettings> settings,
-        ProjectContext projectContext)
+        ProjectContext projectContext,
+        IEnvironmentInfoProvider infoProvider)
     {
         _workspaces = workspaces;
         _gitService = gitService;
         _settings = settings.Value;
+        _infoProvider = infoProvider;
         _projectContext = projectContext;
     }
 
@@ -86,25 +89,10 @@ public sealed class MainTuiOrchestrator
 
     private void RenderHeader()
     {
-        string version = GetAppVersion();
+        string version = _infoProvider.GetApplicationVersion();
         AnsiConsole.Write(new Rule($"[bold blue]Instancium.Publisher CLI[/] [dim]v{Markup.Escape(version)}[/]").LeftJustified());
     }
 
-    private static string GetAppVersion()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(informational))
-        {
-            int plusIndex = informational.IndexOf('+');
-            return plusIndex >= 0 ? informational[..plusIndex] : informational;
-        }
-        var nameVersion = assembly.GetName().Version;
-        return nameVersion != null
-            ? $"{nameVersion.Major}.{nameVersion.Minor}.{nameVersion.Build}"
-            : "0.0.0";
-    }
 
     private static void RenderFatalConfigurationError(string reason, string hint)
     {
