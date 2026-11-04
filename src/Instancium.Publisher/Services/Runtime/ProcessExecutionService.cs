@@ -1,3 +1,6 @@
+namespace Instancium.Publisher.Services.Runtime;
+
+
 using Instancium.Publisher.Core.Interfaces;
 using System.Diagnostics;
 using System.Runtime.InteropServices;

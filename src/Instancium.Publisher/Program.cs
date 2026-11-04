@@ -3,6 +3,7 @@ using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Pipeline.Steps;
 using Instancium.Publisher.Services.Ai;
 using Instancium.Publisher.Services.Git;
+using Instancium.Publisher.Services.Runtime;
 using Instancium.Publisher.Services.Versioning;
 using Instancium.Publisher.State;
 using Instancium.Publisher.Tui;
@@ -28,6 +29,8 @@ internal static class Program
                 services.Configure<PublisherSettings>(
                     context.Configuration.GetSection("PublisherSettings"));
 
+                services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
+
                 services.AddSingleton<ProjectContext>();
                 services.AddSingleton<IProgressReporter, TuiProgressReporter>();
                 services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
@@ -47,6 +50,7 @@ internal static class Program
                 services.AddTransient<ITuiWorkspace, ReleaseWorkspace>();
 
                 services.AddSingleton<MainTuiOrchestrator>();
+
             })
             .Build();
 
