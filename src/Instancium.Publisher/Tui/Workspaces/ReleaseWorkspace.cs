@@ -307,70 +307,15 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             return string.Empty;
         }
 
-        var lines = rawNotes.Replace("\r\n", "\n").Split('\n');
-        var rebuilt = new List<string>();
-        var headerBlock = new List<string>();
-        var sectionEntries = new List<string>();
+        // Clean up potential markdown blocks if AI hallucinates them despite instructions
+        var lines = rawNotes.Replace("\r\n", "\n").Split('\n')
+            .Where(l => !l.StartsWith("```"))
+            .Select(l => l.TrimEnd())
+            .ToList();
 
-        foreach (string rawLine in lines)
-        {
-            string line = rawLine.Trim();
-
-            if (line.Length == 0)
-            {
-                continue;
-            }
-
-            if (IsBulletLine(line))
-            {
-                if (!IsPlaceholderBullet(line))
-                {
-                    sectionEntries.Add(line);
-                }
-                continue;
-            }
-
-            if (sectionEntries.Count > 0)
-            {
-                FlushSection(rebuilt, headerBlock, sectionEntries);
-                headerBlock = new List<string>();
-                sectionEntries = new List<string>();
-            }
-
-            headerBlock.Add(line);
-        }
-
-        FlushSection(rebuilt, headerBlock, sectionEntries);
-        return string.Join(Environment.NewLine, rebuilt).Trim();
+        return string.Join(Environment.NewLine, lines).Trim();
     }
 
-    private static void FlushSection(List<string> target, List<string> headerBlock, List<string> sectionEntries)
-    {
-        if (sectionEntries.Count == 0)
-        {
-            return;
-        }
-
-        target.AddRange(headerBlock);
-        target.AddRange(sectionEntries);
-        target.Add(string.Empty);
-    }
-
-    private static bool IsBulletLine(string line)
-        => line.StartsWith("- ", StringComparison.Ordinal)
-        || line.StartsWith("* ", StringComparison.Ordinal)
-        || line.StartsWith("•", StringComparison.Ordinal);
-
-    private static bool IsPlaceholderBullet(string line)
-    {
-        string text = line.TrimStart('-', '*', '•').Trim().TrimEnd('.').Trim();
-        return text.Length == 0
-            || text.Equals("none", StringComparison.OrdinalIgnoreCase)
-            || text.Equals("n/a", StringComparison.OrdinalIgnoreCase)
-            || text.Equals("na", StringComparison.OrdinalIgnoreCase)
-            || text.Equals("no changes", StringComparison.OrdinalIgnoreCase)
-            || text.Equals("nothing", StringComparison.OrdinalIgnoreCase);
-    }
 
     private void RenderContextPanel(
         SemanticVersion? repositoryVersion,
