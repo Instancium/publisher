@@ -224,32 +224,52 @@ public sealed class GitService : IGitService
         for (int attempt = 1; attempt <= MaxRemoteRetries; attempt++)
         {
             var errorBuilder = new StringBuilder();
-            int exitCode = await _processRunner.ExecuteAsync(
-                "git",
-                gitArguments,
-                _projectContext.WorkingDirectory,
-                null,
-                msg => errorBuilder.AppendLine(msg),
-                ct);
-
-            if (exitCode == 0)
+            try
             {
-                return;
-            }
-
-            string errorDetails = errorBuilder.ToString().Trim();
-            if (attempt < MaxRemoteRetries && IsTransientRemoteError(errorDetails))
-            {
-                int delaySeconds = (int)Math.Pow(2, attempt);
-                await _progressReporter.ReportWarningAsync(
-                    $"Remote server error on 'git {gitArguments}' (attempt {attempt}/{MaxRemoteRetries}). Retrying in {delaySeconds}s...",
+                int exitCode = await _processRunner.ExecuteAsync(
+                    "git",
+                    gitArguments,
+                    _projectContext.WorkingDirectory,
+                    null,
+                    msg => errorBuilder.AppendLine(msg),
                     ct);
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
-                continue;
-            }
 
-            throw new InvalidOperationException($"Git command 'git {gitArguments}' failed with exit code {exitCode}. Error Details: {errorDetails}");
+                if (exitCode == 0) return;
+
+                string errorDetails = errorBuilder.ToString().Trim();
+                if (attempt < MaxRemoteRetries && IsTransientRemoteError(errorDetails))
+                {
+                    await TriggerRetryDelayAsync(attempt, gitArguments, ct);
+                    continue;
+                }
+
+                throw new InvalidOperationException($"Git command 'git {gitArguments}' failed with exit code {exitCode}. Error Details: {errorDetails}");
+            }
+            catch (TimeoutException) when (attempt < MaxRemoteRetries)
+            {
+                // The process hung and was killed due to an idle timeout
+                await _progressReporter.ReportWarningAsync(
+                    $"Git process hung on 'git {gitArguments}'. Terminated by Idle Timeout. Cleaning up locks...", ct);
+
+                // Remove any potential phantom Git locks before restarting
+                string lockPath = Path.Combine(_projectContext.WorkingDirectory, ".git", "index.lock");
+                if (File.Exists(lockPath))
+                {
+                    try { File.Delete(lockPath); } catch { /* Ignore cleanup errors */ }
+                }
+
+                await TriggerRetryDelayAsync(attempt, gitArguments, ct);
+            }
         }
+    }
+
+    private async Task TriggerRetryDelayAsync(int attempt, string gitArguments, CancellationToken ct)
+    {
+        int delaySeconds = (int)Math.Pow(2, attempt);
+        await _progressReporter.ReportWarningAsync(
+            $"Retrying 'git {gitArguments}' in {delaySeconds}s (attempt {attempt + 1}/{MaxRemoteRetries})...",
+            ct);
+        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
     }
 
     private async Task ExecuteNoOutputAsync(string gitArguments, CancellationToken ct)
