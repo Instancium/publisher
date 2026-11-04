@@ -58,8 +58,7 @@ public class MergeAndPublishStep
             throw new InvalidOperationException($"Failed to pull latest changes for {targetBranch}. Exit code: {pullExitCode}.\nGit Output: {pullOutputBuilder}");
         }
 
-        // 2. MERGE release branch: start merge to preserve history graph (MERGE_HEAD),
-        // then unconditionally enforce the exact file tree from ReleaseBranch
+        // 2. MERGE release branch into targetBranch (main) preserving history graph
         var mergeOutputBuilder = new StringBuilder();
         await _processService.ExecuteAsync(
             "git", $"merge --no-commit --no-ff {context.ReleaseBranch}", _projectContext.WorkingDirectory,
@@ -100,35 +99,44 @@ public class MergeAndPublishStep
             await _progressReporter.ReportAsync($"Backporting release {versionTag} to {context.SourceBranch}...", ct);
             await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
 
-            var backportOutputBuilder = new StringBuilder();
-
-            await _processService.ExecuteAsync(
-                "git", $"merge --no-commit --no-ff {context.ReleaseBranch}", _projectContext.WorkingDirectory,
-                msg => backportOutputBuilder.AppendLine(msg),
-                msg => backportOutputBuilder.AppendLine(msg),
-                ct);
-
-            await _processService.ExecuteAsync(
-                "git", $"checkout {context.ReleaseBranch} -- .", _projectContext.WorkingDirectory,
+            // Fast-forward SourceBranch to ReleaseBranch first so we don't create a redundant
+            // divergent merge commit ("0 files changed") ahead of targetBranch.
+            int ffExitCode = await _processService.ExecuteAsync(
+                "git", $"merge --ff-only {context.ReleaseBranch}", _projectContext.WorkingDirectory,
                 null, null, ct);
 
-            await _processService.ExecuteAsync(
-                "git", "add -A", _projectContext.WorkingDirectory,
-                null, null, ct);
-
-            int bpCommitCode = await _processService.ExecuteAsync(
-                "git", $"commit -m \"chore: backport release {versionTag} to {context.SourceBranch}\"", _projectContext.WorkingDirectory,
-                msg => backportOutputBuilder.AppendLine(msg),
-                msg => backportOutputBuilder.AppendLine(msg),
-                ct);
-
-            string fullBackportOutput = backportOutputBuilder.ToString();
-            if (bpCommitCode != 0 &&
-                !fullBackportOutput.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase) &&
-                !fullBackportOutput.Contains("Already up to date", StringComparison.OrdinalIgnoreCase))
+            if (ffExitCode != 0)
             {
-                await _processService.ExecuteAsync("git", "merge --abort", _projectContext.WorkingDirectory, null, null, ct);
-                throw new InvalidOperationException($"Backport merge failed. Exit code: {bpCommitCode}.\nGit Output:\n{fullBackportOutput}");
+                var backportOutputBuilder = new StringBuilder();
+
+                await _processService.ExecuteAsync(
+                    "git", $"merge --no-commit --no-ff {context.ReleaseBranch}", _projectContext.WorkingDirectory,
+                    msg => backportOutputBuilder.AppendLine(msg),
+                    msg => backportOutputBuilder.AppendLine(msg),
+                    ct);
+
+                await _processService.ExecuteAsync(
+                    "git", $"checkout {context.ReleaseBranch} -- .", _projectContext.WorkingDirectory,
+                    null, null, ct);
+
+                await _processService.ExecuteAsync(
+                    "git", "add -A", _projectContext.WorkingDirectory,
+                    null, null, ct);
+
+                int bpCommitCode = await _processService.ExecuteAsync(
+                    "git", $"commit -m \"chore: backport release {versionTag} to {context.SourceBranch}\"", _projectContext.WorkingDirectory,
+                    msg => backportOutputBuilder.AppendLine(msg),
+                    msg => backportOutputBuilder.AppendLine(msg),
+                    ct);
+
+                string fullBackportOutput = backportOutputBuilder.ToString();
+                if (bpCommitCode != 0 &&
+                    !fullBackportOutput.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase) &&
+                    !fullBackportOutput.Contains("Already up to date", StringComparison.OrdinalIgnoreCase))
+                {
+                    await _processService.ExecuteAsync("git", "merge --abort", _projectContext.WorkingDirectory, null, null, ct);
+                    throw new InvalidOperationException($"Backport merge failed. Exit code: {bpCommitCode}.\nGit Output:\n{fullBackportOutput}");
+                }
             }
 
             await _gitService.PushBranchAsync(context.SourceBranch, force: false, ct);

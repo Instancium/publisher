@@ -11,23 +11,42 @@ using System.Threading;
 using System.Threading.Tasks;
 
 /// <summary>
-/// Provides Git repository operations for the release and commit pipelines.
+/// Provides Git repository operations for the release and commit pipelines with transient network retry support.
 /// </summary>
 public sealed class GitService : IGitService
 {
+    private const int MaxRemoteRetries = 4;
     private readonly IProcessExecutionService _processRunner;
     private readonly ProjectContext _projectContext;
+    private readonly IProgressReporter _progressReporter;
 
-    public GitService(IProcessExecutionService processRunner, ProjectContext projectContext)
+    public GitService(
+        IProcessExecutionService processRunner,
+        ProjectContext projectContext,
+        IProgressReporter progressReporter)
     {
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _projectContext = projectContext ?? throw new ArgumentNullException(nameof(projectContext));
+        _progressReporter = progressReporter ?? throw new ArgumentNullException(nameof(progressReporter));
     }
 
     public async Task<bool> HasUncommittedChangesAsync(CancellationToken ct = default)
     {
         string status = await _processRunner.GetOutputAsync("git", "status --porcelain", _projectContext.WorkingDirectory, ct);
         return !string.IsNullOrWhiteSpace(status);
+    }
+
+    public async Task<bool> HasUnpushedCommitsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            string countText = await _processRunner.GetOutputAsync("git", "rev-list @{u}..HEAD --count", _projectContext.WorkingDirectory, ct);
+            return int.TryParse(countText.Trim(), out int count) && count > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task EnsureCleanWorkingDirectoryAsync(CancellationToken ct = default)
@@ -79,11 +98,11 @@ public sealed class GitService : IGitService
     public Task PushBranchAsync(string branchName, bool force = false, CancellationToken ct = default)
     {
         string args = force ? $"push -u origin {branchName} --force" : $"push origin {branchName}";
-        return ExecuteNoOutputAsync(args, ct);
+        return ExecuteRemoteWithRetryAsync(args, ct);
     }
 
     public Task FetchAllAsync(CancellationToken ct = default) =>
-        ExecuteNoOutputAsync("fetch --all", ct);
+        ExecuteRemoteWithRetryAsync("fetch --all", ct);
 
     public async Task DeleteLocalBranchAsync(string branchName, CancellationToken ct = default)
     {
@@ -157,12 +176,14 @@ public sealed class GitService : IGitService
     }
 
     /// <summary>
-    /// Creates or updates an annotated release tag and pushes it to the remote repository.
+    /// Creates or updates an annotated release tag and pushes it to the remote repository with retry support.
     /// </summary>
     public async Task TagAndPushAsync(string tagName, CancellationToken ct = default)
     {
         await ExecuteNoOutputAsync($"tag -a {tagName} -m \"Release {tagName}\" -f", ct);
-        await ExecuteNoOutputAsync($"push origin {tagName} --force", ct);
+        await ExecuteRemoteWithRetryAsync($"push origin {tagName} --force", ct);
+        // Brief pause after tag push to avoid GitHub ref-lock collisions on the immediate branch push
+        await Task.Delay(500, ct);
     }
 
     public async Task RestoreAllAsync(CancellationToken ct = default)
@@ -182,6 +203,52 @@ public sealed class GitService : IGitService
         {
             version = null;
             return false;
+        }
+    }
+
+    private static bool IsTransientRemoteError(string errorText)
+    {
+        return errorText.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("RPC failed", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("HTTP 500", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("HTTP 502", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("HTTP 503", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("HTTP 504", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("Connection reset", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("unable to access", StringComparison.OrdinalIgnoreCase) ||
+               errorText.Contains("The requested URL returned error: 5", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ExecuteRemoteWithRetryAsync(string gitArguments, CancellationToken ct)
+    {
+        for (int attempt = 1; attempt <= MaxRemoteRetries; attempt++)
+        {
+            var errorBuilder = new StringBuilder();
+            int exitCode = await _processRunner.ExecuteAsync(
+                "git",
+                gitArguments,
+                _projectContext.WorkingDirectory,
+                null,
+                msg => errorBuilder.AppendLine(msg),
+                ct);
+
+            if (exitCode == 0)
+            {
+                return;
+            }
+
+            string errorDetails = errorBuilder.ToString().Trim();
+            if (attempt < MaxRemoteRetries && IsTransientRemoteError(errorDetails))
+            {
+                int delaySeconds = (int)Math.Pow(2, attempt);
+                await _progressReporter.ReportWarningAsync(
+                    $"Remote server error on 'git {gitArguments}' (attempt {attempt}/{MaxRemoteRetries}). Retrying in {delaySeconds}s...",
+                    ct);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
+                continue;
+            }
+
+            throw new InvalidOperationException($"Git command 'git {gitArguments}' failed with exit code {exitCode}. Error Details: {errorDetails}");
         }
     }
 

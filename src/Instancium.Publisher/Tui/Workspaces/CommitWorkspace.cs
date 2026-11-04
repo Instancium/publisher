@@ -38,7 +38,6 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
         try
         {
-            // ФАЗА 1: Файловые операции (здесь спиннер безопасен, так как логов нет)
             await AnsiConsole.Status().StartAsync("Staging files and analyzing diff...", async ctx =>
             {
                 await _addStep.ExecuteAsync(ct);
@@ -49,27 +48,39 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             if (string.IsNullOrWhiteSpace(diff))
             {
+                if (await _gitService.HasUnpushedCommitsAsync(ct))
+                {
+                    string branch = await _gitService.GetCurrentBranchAsync(ct);
+                    AnsiConsole.MarkupLine($"[yellow]Working directory is clean, but branch '{Markup.Escape(branch)}' has unpushed local commit(s).[/]");
+
+                    var pushPendingChoice = AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("\nWould you like to push pending local commits to remote?")
+                            .AddChoices("Push to Remote", "Return to Menu"));
+
+                    if (pushPendingChoice == "Push to Remote")
+                    {
+                        await PushWithRetryLoopAsync(branch, ct);
+                    }
+
+                    PauseAndReturn();
+                    return;
+                }
+
                 AnsiConsole.MarkupLine("[yellow]No changes staged for commit. Working directory is clean.[/]");
                 PauseAndReturn();
                 return;
             }
 
-            // ФАЗА 2: Подключение и Map-Reduce
-            // Используем статичный текст вместо спиннера, чтобы терминал не сломал курсор при скроллинге.
             AnsiConsole.MarkupLine("[dim italic]Transmitting payload to AI model...[/]");
 
             await using var enumerator = _aiAssistant.StreamCommitMessageAsync(diff, diffStat, ct).GetAsyncEnumerator(ct);
-
-            // Запрашиваем первый токен. В это время Assistant выведет логи "Analyzing part X/Y..." (если они есть)
             bool hasData = await enumerator.MoveNextAsync();
 
-            // ФАЗА 3: Отрисовка чистовика
-            // Этот блок нарисуется СТРОГО ПОСЛЕ всех логов Map-Reduce и до начала потока токенов.
             AnsiConsole.MarkupLine("\n[green]Generating Commit Message:[/]");
             AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
 
             var messageBuilder = new StringBuilder();
-
             if (hasData)
             {
                 CliMarkup.Print($"[silver]{Markup.Escape(enumerator.Current)}[/]");
@@ -87,7 +98,6 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             context.CommitMessage = messageBuilder.ToString().Trim();
 
-            // ФАЗА 4: Подтверждение и Push
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
                     .Title("\nProceed with this commit?")
@@ -95,11 +105,14 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             if (choice == "Approve and Push")
             {
-                await AnsiConsole.Status().StartAsync("Committing and pushing to remote...", async ctx =>
+                await AnsiConsole.Status().StartAsync("Committing changes locally...", async ctx =>
                 {
-                    await _pushStep.ExecuteAsync(context, ct);
+                    await _gitService.CommitAsync(context.CommitMessage, ct);
                 });
-                AnsiConsole.MarkupLine("[bold green]Successfully committed and pushed changes![/]");
+
+                AnsiConsole.MarkupLine("[green]Local commit created.[/]");
+                string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
+                await PushWithRetryLoopAsync(currentBranch, ct);
             }
             else
             {
@@ -112,6 +125,38 @@ public sealed class CommitWorkspace : ITuiWorkspace
         {
             AnsiConsole.MarkupLine($"\n[bold red]Commit Pipeline Failed:[/] {Markup.Escape(ex.Message)}");
             PauseAndReturn();
+        }
+    }
+
+    private async Task PushWithRetryLoopAsync(string branchName, CancellationToken ct)
+    {
+        while (true)
+        {
+            try
+            {
+                await AnsiConsole.Status().StartAsync($"Pushing '{Markup.Escape(branchName)}' to remote...", async ctx =>
+                {
+                    await _gitService.PushBranchAsync(branchName, force: false, ct);
+                });
+
+                AnsiConsole.MarkupLine("[bold green]Successfully pushed changes to remote![/]");
+                return;
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"\n[bold red]Push Failed:[/] {Markup.Escape(ex.Message)}");
+
+                var retryChoice = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("\nLocal commit is saved. Retry pushing to remote?")
+                        .AddChoices("Retry Push", "Leave Committed Locally (Exit)"));
+
+                if (retryChoice != "Retry Push")
+                {
+                    AnsiConsole.MarkupLine("[yellow]Changes remain committed locally. You can push them later.[/]");
+                    return;
+                }
+            }
         }
     }
 

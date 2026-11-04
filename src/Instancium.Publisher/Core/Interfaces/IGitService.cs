@@ -21,6 +21,6 @@ public interface IGitService
     Task<string> GetCommitLogAsync(string? fromTag, CancellationToken ct = default);
     Task TagAndPushAsync(string tagName, CancellationToken ct = default);
     Task RestoreAllAsync(CancellationToken ct = default);
-
     Task<bool> HasUncommittedChangesAsync(CancellationToken ct = default);
+    Task<bool> HasUnpushedCommitsAsync(CancellationToken ct = default);
 }
