@@ -578,26 +578,26 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     private static string BuildChangelogPrompt(string contextData)
     {
         return $"""
-            Analyze the following aggregated commit data and generate a professional release changelog.
-            
+            Analyze the following aggregated commit data and generate an academic, structured release manifest.
+    
             RULES:
             1. MUST be exclusively in English.
-            2. Group changes logically (e.g., Features, Bug Fixes, Chores, Refactoring).
-            3. CRITICAL STATUS ACCURACY RULES:
-               - 'A' means added/created.
-               - 'M' means modified/updated. NEVER describe 'M' as new or added.
-               - 'D' means deleted.
-               - 'R' means renamed/moved.
-            4. Keep descriptions concise and high-level.
-            5. ABSOLUTELY IGNORE release engineering noise:
-               - DO NOT mention version bumps, release preparations, or backports.
-               - DO NOT include commits related to merging release branches.
-               - Focus ONLY on actual code changes, features, and bug fixes.
-            6. Provide ONLY the changelog text. Do NOT use markdown code blocks or outer quotes.
-            
-            Aggregated Log Data:
+            2. DO NOT use generic lists or headers like "Features", "Bug Fixes", or "Chores".
+            3. FORMAT REQUIREMENT (Instancium Signature):
+               - Start with a single blockquote `> **Executive Summary**` followed by a new line with `> _` and a 1-2 sentence high-level summary of the release impact, ending with `_`.
+               - Follow with an empty line.
+               - Then, output a Markdown table with exactly these columns: | Vector | Domain | Modification |
+               - Followed by a separator: | :--- | :--- | :--- |
+            4. TABLE DATA RULES:
+               - 'Vector': Use exactly one of these strictly formatted tags: 🚀 `Capability`, 🐛 `Resolution`, ⚙️ `Refactoring`, 🧹 `Maintenance`.
+               - 'Domain': Identify the specific architectural component or module affected (e.g., `SignalR`, `Pipeline`, `Core.Git`). Wrap it in inline code ticks (`).
+               - 'Modification': A concise, technical description of the change. Start with an uppercase letter, end with a period.
+            5. ABSOLUTELY IGNORE release engineering noise (version bumps, merges, chores related to release prep).
+            6. Output ONLY valid Markdown. NO markdown fences (```). NO introductory or concluding text.
+
+            Aggregated Log Data: 
             {contextData}
-            """;
+    """;
     }
 
     private static List<string> ChunkStringByLines(string text, int maxChars)
