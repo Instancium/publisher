@@ -155,24 +155,37 @@ public sealed class ReleaseWorkspace(
                     async () => { hasData = await enumerator.MoveNextAsync(); },
                     ct);
 
-                // Phase 2: Clean Release Notes streaming
+                // Phase 2: Live streaming within a panel with instant Markdown post-rendering
                 AnsiConsole.MarkupLine("\n[green]Generating Release Notes (AI Changelog):[/]");
-                AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
 
                 if (hasData)
                 {
-                    CliMarkup.Print($"[silver]{Markup.Escape(enumerator.Current)}[/]");
                     fullNotesBuilder.Append(enumerator.Current);
 
-                    while (await enumerator.MoveNextAsync())
-                    {
-                        CliMarkup.Print($"[silver]{Markup.Escape(enumerator.Current)}[/]");
-                        fullNotesBuilder.Append(enumerator.Current);
-                    }
+                    await AnsiConsole.Live(new Panel("[dim]Initializing stream...[/]"))
+                        .AutoClear(false)
+                        .StartAsync(async ctx =>
+                        {
+                            // Step 1: Stream raw text so the user sees progress in real-time
+                            while (true)
+                            {
+                                string safeText = Markup.Escape(fullNotesBuilder.ToString());
+                                ctx.UpdateTarget(
+                                    new Panel($"[silver]{safeText}[/]")
+                                        .Header("[cyan]Live AI Stream[/]")
+                                        .BorderColor(Color.Grey)
+                                        .Expand());
+
+                                if (!await enumerator.MoveNextAsync()) break;
+                                fullNotesBuilder.Append(enumerator.Current);
+                            }
+
+                            // Step 2: Stream completed - convert raw Markdown into Spectre widgets
+                            ctx.UpdateTarget(ParseMarkdownToSpectre(fullNotesBuilder.ToString()));
+                        });
                 }
 
                 AnsiConsole.WriteLine();
-                AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
                 string rawNotes = fullNotesBuilder.ToString().Trim();
                 string sanitizedNotes = SanitizeReleaseNotes(rawNotes);
                 string modelId = await _infoProvider.GetActiveModelIdAsync(ct);
@@ -385,5 +398,87 @@ public sealed class ReleaseWorkspace(
             AnsiConsole.MarkupLine("[yellow]Pipeline state retained. Manual Git fix may be required before retrying Rollback.[/]");
             throw;
         }
+    }
+
+    private static Spectre.Console.Rendering.IRenderable ParseMarkdownToSpectre(string markdown)
+    {
+        var lines = markdown.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+
+        var summaryBuilder = new StringBuilder();
+        Table? table = null;
+
+        foreach (var line in lines)
+        {
+            string trimLine = line.Trim();
+
+            // 1. Extract blockquote (Executive Summary)
+            if (trimLine.StartsWith(">"))
+            {
+                string content = trimLine[1..].Trim();
+                // Strip markdown styling and apply Spectre colors
+                content = content.Replace("**Executive Summary**", "[bold cyan]Executive Summary[/]");
+                content = content.Replace("_", "");
+                summaryBuilder.AppendLine(content);
+            }
+            // 2. Extract Markdown table
+            else if (trimLine.StartsWith("|"))
+            {
+                // Split line by pipes, discarding empty edges
+                var cells = trimLine.Split('|', StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim()).ToArray();
+                if (cells.Length == 0) continue;
+
+                // Skip markdown table delimiter row (|:---|:---|)
+                if (cells[0].Contains("---") || (cells.Length > 1 && cells[1].Contains("---"))) continue;
+
+                if (table == null)
+                {
+                    // Initialize Spectre table
+                    table = new Table().Expand().Border(TableBorder.Rounded).BorderColor(Color.Grey);
+                    foreach (var header in cells)
+                    {
+                        table.AddColumn($"[bold silver]{Markup.Escape(header)}[/]");
+                    }
+                }
+                else
+                {
+                    if (cells.Length == table.Columns.Count)
+                    {
+                        var finalCells = cells.Select(c =>
+                        {
+                            string escaped = Markup.Escape(c);
+                            // Highlight inline code (`text`) in cyan
+                            return System.Text.RegularExpressions.Regex.Replace(escaped, @"\`(.*?)\`", "[cyan]$1[/]");
+                        }).ToArray();
+                        table.AddRow(finalCells);
+                    }
+                }
+            }
+        }
+
+        var elements = new List<Spectre.Console.Rendering.IRenderable>();
+
+        // Wrap Summary in a stylized panel
+        if (summaryBuilder.Length > 0)
+        {
+            elements.Add(new Panel($"[silver]{summaryBuilder.ToString().Trim()}[/]")
+                .Header("[bold green]Release Impact[/]")
+                .BorderColor(Color.Green)
+                .RoundedBorder()
+                .Expand());
+            elements.Add(new Text("")); // Spacing
+        }
+
+        if (table != null)
+        {
+            elements.Add(table);
+        }
+
+        // Fallback: if AI generated output without a table, display as plain text
+        if (elements.Count == 0)
+        {
+            return new Markup($"[silver]{Markup.Escape(markdown)}[/]");
+        }
+
+        return new Rows(elements);
     }
 }
