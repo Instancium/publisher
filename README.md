@@ -10,7 +10,7 @@ Instancium Publisher eliminates the friction between writing code and shipping r
 
 ---
 
-## 🎯 What It Does
+## What It Does
 
 - **Generates commit messages** from staged diffs using AI, streaming tokens in real-time
 - **Creates release changelogs** by analyzing commit history and filtering out noise (version bumps, backports, merge commits)
@@ -18,7 +18,7 @@ Instancium Publisher eliminates the friction between writing code and shipping r
 - **Publishes releases** end-to-end: branch creation, merging, tagging, GitHub Release creation
 - **Recovers from failures** with transactional state persistence — resume or rollback interrupted releases
 
-## 🚀 Why Use It
+## Why Use It
 
 ### The Problem
 
@@ -41,7 +41,7 @@ Instancium Publisher automates the entire release workflow:
 
 All AI inference happens through InstantAIGate — no local model weights, no GPU requirements, just an API key.
 
-## ✨ Key Features
+## Key Features
 
 ### Interactive TUI Navigation
 Hierarchical Spectre.Console interface for switching between repositories and workspaces. View active branch, pending changes, and project context at a glance.
@@ -65,7 +65,7 @@ Built-in filters automatically strip release-engineering noise:
 - Merge commits from release branches
 - Generated files (`.min.js`, lock files, binaries)
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -110,7 +110,7 @@ Create `appsettings.json` in the project root:
 | `MaxChunkLength` | `3000` | Configuration chunk size limit |
 | `RegisteredProjects` | `{}` | Dictionary of project name → `.csproj` path |
 
-## 💻 Usage
+## Usage
 
 InstantPublisher is an **interactive TUI application** — no CLI subcommands.
 
@@ -156,7 +156,7 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 - **Rollback** — Destructive reset to clean state
 - **Start Fresh** — Discard state and begin new release
 
-## 🔒 Safety & Validation
+## Safety & Validation
 
 - **Clean Working Tree**: Publishing pipelines reject execution if uncommitted changes are present
 - **State Persistence**: Interrupted releases can be resumed or rolled back
@@ -164,7 +164,7 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 - **Destructive Rollback**: Requires explicit user confirmation; performs `git reset --hard` and `git clean -fd`
 - **Deterministic Merge Strategy**: During release and backport operations, the pipeline automatically resolves any Git conflicts in favor of the incoming release branch. This ensures that the exact versions and file states prepared by the pipeline are enforced without manual intervention, while perfectly preserving the Git merge history graph.
 
-## 🏗 Architecture Overview
+## Architecture Overview
 
 Instancium Publisher is **decoupled from inference runtimes**. It does not embed `llama.cpp` or local weight loaders. All AI tasks are delegated to InstantAIGate via SignalR.
 
@@ -187,7 +187,7 @@ Instancium Publisher is **decoupled from inference runtimes**. It does not embed
                  ├──────────────────────────────────────────────────>│
 ```
 
-## 🧪 .NET Ecosystem Focus
+## .NET Ecosystem Focus
 
 **Important**: Instancium Publisher is designed exclusively for the .NET ecosystem.
 
@@ -196,10 +196,6 @@ The internal `VersionEngine` parses XML-based project manifests (`.csproj`, `Dir
 ## 📄 License
 
 This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
 
 ## 🐛 Known Limitations
 

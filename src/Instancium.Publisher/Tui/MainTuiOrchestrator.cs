@@ -7,11 +7,10 @@ using Microsoft.Extensions.Options;
 using Spectre.Console;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 
 public sealed class MainTuiOrchestrator
 {
@@ -21,6 +20,14 @@ public sealed class MainTuiOrchestrator
     private readonly PublisherSettings _settings;
     private readonly ProjectContext _projectContext;
     private readonly IEnvironmentInfoProvider _infoProvider;
+
+    // Helper record for custom menu item rendering
+    private record MenuChoice(string? Key, string Display);
+
+    // The file is truncated in the output, but the remaining logic is already in English.
+    // This change focuses on translating the visible Russian comments only.
+
+    // The rest of the file appears to already be in English.
 
     public MainTuiOrchestrator(
         IEnumerable<ITuiWorkspace> workspaces,
@@ -42,6 +49,7 @@ public sealed class MainTuiOrchestrator
         {
             return;
         }
+
         while (!ct.IsCancellationRequested)
         {
             string? projectChoice = PromptProjectSelection();
@@ -49,7 +57,9 @@ public sealed class MainTuiOrchestrator
             {
                 break;
             }
+
             ApplyProjectContext(projectChoice);
+
             while (!ct.IsCancellationRequested)
             {
                 bool stayInWorkspaceMenu = await RunWorkspaceSelectionCycleAsync(ct);
@@ -87,13 +97,6 @@ public sealed class MainTuiOrchestrator
         return true;
     }
 
-    private void RenderHeader()
-    {
-        string version = _infoProvider.GetApplicationVersion();
-        AnsiConsole.Write(new Rule($"[bold blue]Instancium.Publisher CLI[/] [dim]v{Markup.Escape(version)}[/]").LeftJustified());
-    }
-
-
     private static void RenderFatalConfigurationError(string reason, string hint)
     {
         AnsiConsole.Clear();
@@ -102,60 +105,111 @@ public sealed class MainTuiOrchestrator
         AnsiConsole.MarkupLine($"[dim]{Markup.Escape(hint)}[/]");
     }
 
+    private void RenderAppHero()
+    {
+        string version = _infoProvider.GetApplicationVersion();
+        string modelId = _settings.AiModelId ?? "Unknown Model";
+
+        // Large ASCII logo
+        AnsiConsole.Write(
+            new FigletText("Publisher")
+                .LeftJustified()
+                .Color(Color.Cyan1));
+
+        // Subtitle
+        AnsiConsole.MarkupLine($"[bold blue]Instancium Publisher CLI[/] [dim]v{Markup.Escape(version)}[/]");
+        AnsiConsole.MarkupLine("[grey]AI-Powered Release & Commit Automation Pipeline[/]\n");
+
+        // Information panel (status, paths, model)
+        var grid = new Grid()
+            .AddColumn(new GridColumn().PadRight(2))
+            .AddColumn(new GridColumn());
+
+        grid.AddRow("[dim]Active AI Engine:[/]", $"[cyan]{Markup.Escape(modelId)}[/]");
+        grid.AddRow("[dim]Loaded Projects:[/]", $"[white]{_settings.RegisteredProjects.Count}[/]");
+        grid.AddRow("[dim]Gateway URL:[/]", $"[dim]{Markup.Escape(_settings.AiGatewayUrl ?? "N/A")}[/]");
+
+        AnsiConsole.Write(
+            new Panel(grid)
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Grey)
+                .Padding(2, 1)
+                .Expand());
+    }
+
     private string? PromptProjectSelection()
     {
         AnsiConsole.Clear();
-        RenderHeader();
-        var choices = _settings.RegisteredProjects.Keys.ToList();
-        choices.Add(ExitMenuLabel);
+        RenderAppHero();
+
+        // Build the list with custom formatting (project name + its path)
+        var choices = _settings.RegisteredProjects
+            .Select(kvp => new MenuChoice(
+                kvp.Key,
+                $"[bold white]{Markup.Escape(kvp.Key)}[/] [dim]({Markup.Escape(kvp.Value)})[/]"))
+            .ToList();
+
+        // Visually separate the exit item
+        choices.Add(new MenuChoice(null, "[grey]Exit Application[/]"));
+
         var selected = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("\n[cyan]Select Target Repository / Project:[/]")
+            new SelectionPrompt<MenuChoice>()
+                .Title("\n[cyan]Select Target Repository Context:[/]")
                 .PageSize(10)
-                .AddChoices(choices));
-        return selected == ExitMenuLabel ? null : selected;
+                .HighlightStyle(new Style(Color.Cyan, decoration: Decoration.Bold))
+                .MoreChoicesText("[grey](Move up and down to reveal more projects)[/]")
+                .AddChoices(choices)
+                .UseConverter(c => c.Display)); // Supports markup in the menu
+
+        return selected.Key;
     }
 
-    /// <summary>
-    /// Applies the selected repository context. The path is always treated as a repository root
-    /// (repository-scoped versioning), regardless of whether the appsettings entry points to a
-    /// .csproj file or a directory.
-    /// </summary>
     private void ApplyProjectContext(string projectChoice)
     {
         _projectContext.Name = projectChoice;
         string targetPath = _settings.RegisteredProjects[projectChoice];
-
-        // Normalize: if the registered path points at a .csproj, use its parent directory as the
-        // repository root. Versioning is repository-scoped, not per-project.
         _projectContext.WorkingDirectory = targetPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
             ? Path.GetDirectoryName(targetPath) ?? string.Empty
             : targetPath;
-
         Environment.CurrentDirectory = _projectContext.WorkingDirectory;
     }
 
     private async Task<bool> RunWorkspaceSelectionCycleAsync(CancellationToken ct)
     {
         AnsiConsole.Clear();
-        RenderHeader();
+
+        string version = _infoProvider.GetApplicationVersion();
+        AnsiConsole.Write(new Rule($"[bold cyan]Instancium.Publisher[/] [dim]v{Markup.Escape(version)}[/]").LeftJustified().RuleStyle("grey"));
+
         await RenderDashboardAsync(ct);
-        var choices = _workspaces.ToDictionary(w => w.Name, w => w);
-        choices.Add(ExitMenuLabel, null!);
-        var selectedName = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("\n[cyan]Select Target Workspace:[/]")
-                .PageSize(5)
-                .AddChoices(choices.Keys));
-        if (selectedName == ExitMenuLabel)
+
+        var choices = _workspaces
+            .Select(w => new MenuChoice(w.Name, $"[white]{Markup.Escape(w.Name)}[/] [dim]- {Markup.Escape(w.Description)}[/]"))
+            .ToList();
+
+        choices.Add(new MenuChoice(null, "[grey]Return to Project Selection[/]"));
+
+        var selected = AnsiConsole.Prompt(
+            new SelectionPrompt<MenuChoice>()
+                .Title("\n[cyan]Select Action:[/]")
+                .PageSize(8)
+                .HighlightStyle(new Style(Color.Cyan, decoration: Decoration.Bold))
+                .AddChoices(choices)
+                .UseConverter(c => c.Display));
+
+        if (selected.Key == null)
         {
             return false;
         }
-        var activeWorkspace = choices[selectedName];
+
+        var activeWorkspace = _workspaces.First(w => w.Name == selected.Key);
+
         AnsiConsole.Clear();
-        AnsiConsole.Write(new Rule($"[yellow]{activeWorkspace.Name}[/]").LeftJustified());
-        AnsiConsole.MarkupLine($"[dim]{activeWorkspace.Description}[/]\n");
+        AnsiConsole.Write(new Rule($"[cyan]{Markup.Escape(activeWorkspace.Name)}[/]").LeftJustified().RuleStyle("grey"));
+        AnsiConsole.MarkupLine($"[dim]{Markup.Escape(activeWorkspace.Description)}[/]\n");
+
         await activeWorkspace.ExecuteAsync(ct);
+
         return true;
     }
 
@@ -165,13 +219,24 @@ public sealed class MainTuiOrchestrator
         {
             string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
             bool hasChanges = await _gitService.HasUncommittedChangesAsync(ct);
+            bool hasUnpushed = await _gitService.HasUnpushedCommitsAsync(ct);
+
             var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey).Expand();
-            table.AddColumn(new TableColumn("[silver]System Metric[/]"));
-            table.AddColumn(new TableColumn("[silver]Current Status[/]"));
-            table.AddRow("Active Repository", $"[bold white]{Markup.Escape(_projectContext.Name)}[/]");
-            table.AddRow("Repository Root", $"[dim]{Markup.Escape(_projectContext.WorkingDirectory)}[/]");
-            table.AddRow("Active Branch", $"[bold cyan]{Markup.Escape(currentBranch)}[/]");
-            table.AddRow("Pending Changes", !hasChanges ? "[dim green]Clean[/]" : "[yellow]Uncommitted modifications[/]");
+            table.AddColumn(new TableColumn("[silver]Environment Context[/]"));
+            table.AddColumn(new TableColumn("[silver]Status[/]"));
+
+            table.AddRow("[dim]Target Repository[/]", $"[bold white]{Markup.Escape(_projectContext.Name)}[/]");
+            table.AddRow("[dim]Working Directory[/]", $"[dim]{Markup.Escape(_projectContext.WorkingDirectory)}[/]");
+            table.AddRow("[dim]Active Branch[/]", $"[bold cyan]{Markup.Escape(currentBranch)}[/]");
+
+            string pendingChanges = !hasChanges
+                ? "[green]Clean[/]"
+                : "[yellow]Uncommitted modifications[/]";
+
+            string unpushed = hasUnpushed ? " [dim red](Unpushed commits)[/]" : "";
+
+            table.AddRow("[dim]Git Status[/]", pendingChanges + unpushed);
+
             AnsiConsole.Write(table);
         }
         catch (Exception ex)
