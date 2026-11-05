@@ -125,10 +125,12 @@ public sealed class ReleaseWorkspace(
                 }
                 activeContext.ReleaseBranch = $"release-prep/v{activeContext.NewVersion}";
                 await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
-                await AnsiConsole.Status().StartAsync("Bumping repository version...", async ctx =>
-                {
-                    await _bumpStep.ExecuteAsync(activeContext, snapshots, strategy, customVersion, ct);
-                });
+
+                await TuiProgressReporter.RunWithLiveStatusAsync(
+                    "Bumping repository version...",
+                    async () => await _bumpStep.ExecuteAsync(activeContext, snapshots, strategy, customVersion, ct),
+                    ct);
+
                 AnsiConsole.MarkupLine($"[green]Repository version set to v{activeContext.NewVersion} across {projectPaths.Count} project(s).[/]");
                 activeContext.CurrentStep = 2;
                 await _stateManager.SaveAsync(activeContext);
@@ -147,23 +149,13 @@ public sealed class ReleaseWorkspace(
                 await using var enumerator = _aiAssistant.StreamReleaseNotesAsync(gitLog, ct).GetAsyncEnumerator(ct);
                 bool hasData = false;
 
-      
-                await AnsiConsole.Status()
-                    .Spinner(Spinner.Known.Dots)
-                    .StartAsync("[cyan]Analyzing commit history...[/]", async ctx =>
-                    {
-                        TuiProgressReporter.AmbientStatus.Value = ctx;
-                        try
-                        {
-                            hasData = await enumerator.MoveNextAsync();
-                        }
-                        finally
-                        {
-                            TuiProgressReporter.AmbientStatus.Value = null;
-                        }
-                    });
+                // Phase 1: Two-line status (chunk progress bar + spinner)
+                await TuiProgressReporter.RunWithLiveStatusAsync(
+                    "Analyzing commit history...",
+                    async () => { hasData = await enumerator.MoveNextAsync(); },
+                    ct);
 
-           
+                // Phase 2: Clean Release Notes streaming
                 AnsiConsole.MarkupLine("\n[green]Generating Release Notes (AI Changelog):[/]");
                 AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
 
@@ -200,10 +192,9 @@ public sealed class ReleaseWorkspace(
             }
             if (activeContext.CurrentStep <= 3)
             {
-                await AnsiConsole.Status().StartAsync("Merging and publishing release to GitHub...", async ctx =>
-                {
-                    TuiProgressReporter.AmbientStatus.Value = ctx;
-                    try
+                await TuiProgressReporter.RunWithLiveStatusAsync(
+                    "Merging and publishing release to GitHub...",
+                    async () =>
                     {
                         if (await _gitService.HasUncommittedChangesAsync(ct))
                         {
@@ -214,12 +205,9 @@ public sealed class ReleaseWorkspace(
                         await _gitService.CheckoutBranchAsync(activeContext.SourceBranch, false, ct);
                         await _gitService.DeleteLocalBranchAsync(activeContext.ReleaseBranch, ct);
                         await _gitService.DeleteRemoteBranchAsync(activeContext.ReleaseBranch, ct);
-                    }
-                    finally
-                    {
-                        TuiProgressReporter.AmbientStatus.Value = null;
-                    }
-                });
+                    },
+                    ct);
+
                 AnsiConsole.MarkupLine($"\n[bold green]Release v{activeContext.NewVersion} published successfully![/]");
                 await _stateManager.RollbackAsync();
                 AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
