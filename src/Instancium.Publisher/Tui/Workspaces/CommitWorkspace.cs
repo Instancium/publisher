@@ -33,15 +33,14 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
     public async Task ExecuteAsync(CancellationToken ct = default)
     {
-        AnsiConsole.MarkupLine("[cyan]Initializing Auto-Commit Pipeline...[/]");
         var context = new PipelineContext();
 
         try
         {
-            await AnsiConsole.Status().StartAsync("Staging files and analyzing diff...", async ctx =>
-            {
-                await _addStep.ExecuteAsync(ct);
-            });
+            await TuiProgressReporter.RunWithLiveStatusAsync(
+                "Staging files and analyzing diff...",
+                async () => await _addStep.ExecuteAsync(ct),
+                ct);
 
             string diff = await _gitService.GetCachedDiffAsync(ct);
             string diffStat = await _gitService.GetCachedDiffStatAsync(ct);
@@ -77,23 +76,13 @@ public sealed class CommitWorkspace : ITuiWorkspace
             await using var enumerator = _aiAssistant.StreamCommitMessageAsync(diff, diffStat, ct).GetAsyncEnumerator(ct);
             bool hasData = false;
 
-            // Phase 1: Floating status with a spinner (updates in-place during Map-Reduce)
-            await AnsiConsole.Status()
-           .Spinner(Spinner.Known.Dots)
-           .StartAsync("[cyan]Transmitting payload to AI model...[/]", async ctx =>
-           {
-               TuiProgressReporter.AmbientStatus.Value = ctx;
-               try
-               {
-                   hasData = await enumerator.MoveNextAsync();
-               }
-               finally
-               {
-                   TuiProgressReporter.AmbientStatus.Value = null;
-               }
-           });
+            // Phase 1: Progress bar + spinner status (automatically clears before streaming)
+            await TuiProgressReporter.RunWithLiveStatusAsync(
+                "Transmitting payload to AI model...",
+                async () => { hasData = await enumerator.MoveNextAsync(); },
+                ct);
 
-            // Phase 2: Status is closed and cleared. Clean token streaming is underway, with no interference from the spinner.
+            // Phase 2: Clean token streaming
             AnsiConsole.MarkupLine("\n[green]Generating Commit Message:[/]");
             AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
 
@@ -120,10 +109,10 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             if (choice == "Approve and Push")
             {
-                await AnsiConsole.Status().StartAsync("Committing changes locally...", async ctx =>
-                {
-                    await _gitService.CommitAsync(context.CommitMessage, ct);
-                });
+                await TuiProgressReporter.RunWithLiveStatusAsync(
+                    "Committing changes locally...",
+                    async () => await _gitService.CommitAsync(context.CommitMessage, ct),
+                    ct);
 
                 AnsiConsole.MarkupLine("[green]Local commit created.[/]");
                 string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
@@ -149,10 +138,10 @@ public sealed class CommitWorkspace : ITuiWorkspace
         {
             try
             {
-                await AnsiConsole.Status().StartAsync($"Pushing '{Markup.Escape(branchName)}' to remote...", async ctx =>
-                {
-                    await _gitService.PushBranchAsync(branchName, force: false, ct);
-                });
+                await TuiProgressReporter.RunWithLiveStatusAsync(
+                    $"Pushing '{branchName}' to remote...",
+                    async () => await _gitService.PushBranchAsync(branchName, force: false, ct),
+                    ct);
 
                 AnsiConsole.MarkupLine("[bold green]Successfully pushed changes to remote![/]");
                 return;
