@@ -35,7 +35,6 @@ public sealed class ReleaseWorkspace(
     private readonly IProjectDiscoveryService _projectDiscovery = projectDiscovery;
     private readonly IEnvironmentInfoProvider _infoProvider = infoProvider;
 
-
     public string Name => "Release Master & Recovery";
     public string Description => "End-to-End release pipeline with AI Changelog and rollback capability";
 
@@ -60,34 +59,27 @@ public sealed class ReleaseWorkspace(
     public async Task ExecuteAsync(CancellationToken ct = default)
     {
         var activeContext = await _stateManager.LoadAsync();
-
         if (activeContext != null && activeContext.CurrentStep > 0)
         {
             AnsiConsole.MarkupLine($"[yellow]Interrupted release detected at step {activeContext.CurrentStep}.[/]");
-
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
                     .Title("Recovery Dispatcher:")
                     .AddChoices("Resume", "Rollback", "Start Fresh"));
-
             if (choice == "Rollback")
             {
                 await ExecuteDestructiveRollbackAsync(activeContext, ct);
                 return;
             }
-
             if (choice == "Start Fresh")
             {
                 await ExecuteDestructiveRollbackAsync(activeContext, ct);
                 activeContext = null;
             }
         }
-
         activeContext ??= new PipelineContext { CurrentStep = 1 };
-
         try
         {
-            // Restore contextual branch if resuming from step 2 or 3
             if (activeContext.CurrentStep > 1 && !string.IsNullOrWhiteSpace(activeContext.ReleaseBranch))
             {
                 string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
@@ -97,25 +89,19 @@ public sealed class ReleaseWorkspace(
                     await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
                 }
             }
-
             if (activeContext.CurrentStep <= 1)
             {
                 string repositoryRoot = await _gitService.GetRepositoryRootAsync(ct);
                 IReadOnlyList<string> projectPaths = await _projectDiscovery.DiscoverProjectFilesAsync(repositoryRoot, ct);
-
                 if (projectPaths.Count == 0)
                 {
                     throw new FileNotFoundException($"No .csproj project files found under repository root: {repositoryRoot}");
                 }
-
                 IReadOnlyList<ProjectVersionSnapshot> snapshots = await _versionEngine.ReadProjectVersionsAsync(projectPaths, ct);
                 SemanticVersion? repositoryVersion = RepositoryVersionPolicy.TryResolveCurrentVersion(snapshots);
-
                 RenderContextPanel(repositoryVersion, snapshots, repositoryRoot);
-
                 VersionBumpStrategy? strategy = null;
                 string? customVersion = null;
-
                 if (activeContext.NewVersion is null)
                 {
                     (strategy, customVersion) = PromptVersionStrategy();
@@ -123,8 +109,6 @@ public sealed class ReleaseWorkspace(
                     {
                         return;
                     }
-
-            
                     activeContext.CurrentVersion = repositoryVersion;
                     activeContext.NewVersion = repositoryVersion is null
                         ? RepositoryVersionPolicy.CalculateInitialVersion(strategy.Value, customVersionString: customVersion)
@@ -135,99 +119,109 @@ public sealed class ReleaseWorkspace(
                     AnsiConsole.MarkupLine(
                         $"[yellow]Resuming interrupted release: planned version v{activeContext.NewVersion} will be applied to all {projectPaths.Count} project(s).[/]");
                 }
-
                 if (string.IsNullOrWhiteSpace(activeContext.SourceBranch))
                 {
                     activeContext.SourceBranch = await _gitService.GetCurrentBranchAsync(ct);
                 }
-
                 activeContext.ReleaseBranch = $"release-prep/v{activeContext.NewVersion}";
                 await CheckoutReleaseBranchAsync(activeContext.ReleaseBranch, ct);
-
-
                 await AnsiConsole.Status().StartAsync("Bumping repository version...", async ctx =>
                 {
                     await _bumpStep.ExecuteAsync(activeContext, snapshots, strategy, customVersion, ct);
                 });
-
                 AnsiConsole.MarkupLine($"[green]Repository version set to v{activeContext.NewVersion} across {projectPaths.Count} project(s).[/]");
-
                 activeContext.CurrentStep = 2;
                 await _stateManager.SaveAsync(activeContext);
             }
-
             if (activeContext.CurrentStep <= 2)
             {
-                AnsiConsole.MarkupLine("\n[green]Generating Release Notes (AI Changelog):[/]");
-                AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
-
                 string lastTag = string.Empty;
                 try { lastTag = await _gitService.GetLatestTagAsync(ct); } catch { }
-
                 string rangeDescription = string.IsNullOrWhiteSpace(lastTag)
                     ? "last 20 commits (no tags found in repository)"
                     : $"{lastTag}..HEAD";
-
-                AnsiConsole.MarkupLine($"[dim]Changelog commit range: {Markup.Escape(rangeDescription)}[/]");
-
+                AnsiConsole.MarkupLine($"\n[dim]Changelog commit range: {Markup.Escape(rangeDescription)}[/]");
                 string gitLog = await _gitService.GetCommitLogAsync(lastTag, ct);
                 var fullNotesBuilder = new StringBuilder();
 
-                await foreach (var token in _aiAssistant.StreamReleaseNotesAsync(gitLog, ct))
+                await using var enumerator = _aiAssistant.StreamReleaseNotesAsync(gitLog, ct).GetAsyncEnumerator(ct);
+                bool hasData = false;
+
+      
+                await AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .StartAsync("[cyan]Analyzing commit history...[/]", async ctx =>
+                    {
+                        TuiProgressReporter.AmbientStatus.Value = ctx;
+                        try
+                        {
+                            hasData = await enumerator.MoveNextAsync();
+                        }
+                        finally
+                        {
+                            TuiProgressReporter.AmbientStatus.Value = null;
+                        }
+                    });
+
+           
+                AnsiConsole.MarkupLine("\n[green]Generating Release Notes (AI Changelog):[/]");
+                AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
+
+                if (hasData)
                 {
-                    CliMarkup.Print($"[silver]{Markup.Escape(token)}[/]");
-                    fullNotesBuilder.Append(token);
+                    CliMarkup.Print($"[silver]{Markup.Escape(enumerator.Current)}[/]");
+                    fullNotesBuilder.Append(enumerator.Current);
+
+                    while (await enumerator.MoveNextAsync())
+                    {
+                        CliMarkup.Print($"[silver]{Markup.Escape(enumerator.Current)}[/]");
+                        fullNotesBuilder.Append(enumerator.Current);
+                    }
                 }
 
                 AnsiConsole.WriteLine();
                 AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
-
-                //string rawNotes = fullNotesBuilder.ToString().Trim();
-                //activeContext.ReleaseNotes = SanitizeReleaseNotes(rawNotes);
-
                 string rawNotes = fullNotesBuilder.ToString().Trim();
                 string sanitizedNotes = SanitizeReleaseNotes(rawNotes);
                 string modelId = await _infoProvider.GetActiveModelIdAsync(ct);
                 activeContext.ReleaseNotes = AppendSignatureFooter(sanitizedNotes, modelId);
-
                 var approveChoice = AnsiConsole.Prompt(
                     new SelectionPrompt<string>()
                         .Title("\nProceed with this release?")
                         .AddChoices("Approve and Publish", "Abort (Keep state)", "Rollback (Destroy branch)"));
-
                 if (approveChoice == "Abort (Keep state)") return;
-
                 if (approveChoice == "Rollback (Destroy branch)")
                 {
                     await ExecuteDestructiveRollbackAsync(activeContext, ct);
                     return;
                 }
-
                 activeContext.CurrentStep = 3;
                 await _stateManager.SaveAsync(activeContext);
             }
-
             if (activeContext.CurrentStep <= 3)
             {
                 await AnsiConsole.Status().StartAsync("Merging and publishing release to GitHub...", async ctx =>
                 {
-                    // Ensure idempotency for resumes: only commit if there are staged/unstaged changes
-                    if (await _gitService.HasUncommittedChangesAsync(ct))
+                    TuiProgressReporter.AmbientStatus.Value = ctx;
+                    try
                     {
-                        await _gitService.AddAllAsync(ct);
-                        await _gitService.CommitAsync($"chore(release): prepare version v{activeContext.NewVersion}", ct);
+                        if (await _gitService.HasUncommittedChangesAsync(ct))
+                        {
+                            await _gitService.AddAllAsync(ct);
+                            await _gitService.CommitAsync($"chore(release): prepare version v{activeContext.NewVersion}", ct);
+                        }
+                        await _publishStep.ExecuteAsync(activeContext, "main", ct);
+                        await _gitService.CheckoutBranchAsync(activeContext.SourceBranch, false, ct);
+                        await _gitService.DeleteLocalBranchAsync(activeContext.ReleaseBranch, ct);
+                        await _gitService.DeleteRemoteBranchAsync(activeContext.ReleaseBranch, ct);
                     }
-
-                    await _publishStep.ExecuteAsync(activeContext, "main", ct);
-
-                    await _gitService.CheckoutBranchAsync(activeContext.SourceBranch, false, ct);
-                    await _gitService.DeleteLocalBranchAsync(activeContext.ReleaseBranch, ct);
-                    await _gitService.DeleteRemoteBranchAsync(activeContext.ReleaseBranch, ct);
+                    finally
+                    {
+                        TuiProgressReporter.AmbientStatus.Value = null;
+                    }
                 });
-
                 AnsiConsole.MarkupLine($"\n[bold green]Release v{activeContext.NewVersion} published successfully![/]");
                 await _stateManager.RollbackAsync();
-
                 AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
                 Console.ReadKey(intercept: true);
             }
@@ -237,17 +231,14 @@ public sealed class ReleaseWorkspace(
             AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
             AnsiConsole.MarkupLine("[yellow]Fix the file above: resolve merge conflicts, repair encoding, or restore it via 'git checkout -- <file>'. Then choose Resume.[/]");
             await _stateManager.SaveAsync(activeContext);
-
             AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
             Console.ReadKey(intercept: true);
         }
         catch (Exception ex)
         {
-            // Global catch to prevent unhandled app crashes and state loss
             AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
             AnsiConsole.MarkupLine("[yellow]Pipeline state has been saved. If a merge failed, it was automatically aborted to protect your project files. You can safely choose 'Resume' after investigating the issue.[/]");
             await _stateManager.SaveAsync(activeContext);
-
             AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
             Console.ReadKey(intercept: true);
         }
@@ -319,7 +310,6 @@ public sealed class ReleaseWorkspace(
             return string.Empty;
         }
 
-        // Clean up potential markdown blocks if AI hallucinates them despite instructions
         var lines = rawNotes.Replace("\r\n", "\n").Split('\n')
             .Where(l => !l.StartsWith("```"))
             .Select(l => l.TrimEnd())
@@ -327,7 +317,6 @@ public sealed class ReleaseWorkspace(
 
         return string.Join(Environment.NewLine, lines).Trim();
     }
-
 
     private void RenderContextPanel(
         SemanticVersion? repositoryVersion,
