@@ -72,15 +72,31 @@ public sealed class CommitWorkspace : ITuiWorkspace
                 return;
             }
 
-            AnsiConsole.MarkupLine("[dim italic]Transmitting payload to AI model...[/]");
+            var messageBuilder = new StringBuilder();
 
             await using var enumerator = _aiAssistant.StreamCommitMessageAsync(diff, diffStat, ct).GetAsyncEnumerator(ct);
-            bool hasData = await enumerator.MoveNextAsync();
+            bool hasData = false;
 
+            // Phase 1: Floating status with a spinner (updates in-place during Map-Reduce)
+            await AnsiConsole.Status()
+           .Spinner(Spinner.Known.Dots)
+           .StartAsync("[cyan]Transmitting payload to AI model...[/]", async ctx =>
+           {
+               TuiProgressReporter.AmbientStatus.Value = ctx;
+               try
+               {
+                   hasData = await enumerator.MoveNextAsync();
+               }
+               finally
+               {
+                   TuiProgressReporter.AmbientStatus.Value = null;
+               }
+           });
+
+            // Phase 2: Status is closed and cleared. Clean token streaming is underway, with no interference from the spinner.
             AnsiConsole.MarkupLine("\n[green]Generating Commit Message:[/]");
             AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
 
-            var messageBuilder = new StringBuilder();
             if (hasData)
             {
                 CliMarkup.Print($"[silver]{Markup.Escape(enumerator.Current)}[/]");
@@ -95,7 +111,6 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             AnsiConsole.WriteLine();
             AnsiConsole.Write(new Rule().RuleStyle("grey").LeftJustified());
-
             context.CommitMessage = messageBuilder.ToString().Trim();
 
             var choice = AnsiConsole.Prompt(
