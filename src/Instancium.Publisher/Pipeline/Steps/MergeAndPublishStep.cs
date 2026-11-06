@@ -147,8 +147,9 @@ public class MergeAndPublishStep
 
     private async Task CreateGitHubReleaseAsync(string tag, string releaseNotes, bool isPreRelease, CancellationToken ct)
     {
-        string notes = string.IsNullOrWhiteSpace(releaseNotes) ? "Automated release via Instancium.Publisher" : releaseNotes;
+        string notes = string.IsNullOrWhiteSpace(releaseNotes) ? $"Automated release {tag} via Instancium.Publisher" : releaseNotes;
         string tempFilePath = Path.GetTempFileName();
+
         try
         {
             await File.WriteAllTextAsync(tempFilePath, notes, ct);
@@ -166,8 +167,12 @@ public class MergeAndPublishStep
 
             if (ghExitCode != 0)
             {
-                throw new InvalidOperationException($"GitHub CLI (gh) release creation failed. Exit code: {ghExitCode}.\nOutput: {ghOutputBuilder}");
+                await HandleGitHubCliFailureAsync(tag, notes, ghOutputBuilder.ToString(), ct);
             }
+        }
+        catch (Exception ex)
+        {
+            await HandleGitHubCliFailureAsync(tag, notes, ex.Message, ct);
         }
         finally
         {
@@ -176,5 +181,18 @@ public class MergeAndPublishStep
                 File.Delete(tempFilePath);
             }
         }
+    }
+
+    private async Task HandleGitHubCliFailureAsync(string tag, string releaseNotes, string errorReason, CancellationToken ct)
+    {
+        string fallbackFileName = $"RELEASE_NOTES_{tag}.md";
+        string fallbackPath = Path.Combine(_projectContext.WorkingDirectory, fallbackFileName);
+
+        await File.WriteAllTextAsync(fallbackPath, releaseNotes, ct);
+
+        await _progressReporter.ReportWarningAsync(
+            $"GitHub CLI ('gh') is unavailable or unauthenticated (Exit details: {errorReason.Trim()}).", ct);
+        await _progressReporter.ReportWarningAsync(
+            $"Release notes exported locally to '{fallbackFileName}'. Tag {tag} was pushed successfully.", ct);
     }
 }

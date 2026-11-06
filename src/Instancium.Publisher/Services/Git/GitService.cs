@@ -3,6 +3,7 @@ namespace Instancium.Publisher.Services.Git;
 using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.State;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Linq;
@@ -19,15 +20,18 @@ public sealed class GitService : IGitService
     private readonly IProcessExecutionService _processRunner;
     private readonly ProjectContext _projectContext;
     private readonly IProgressReporter _progressReporter;
+    private readonly ILogger<GitService> _logger;
 
     public GitService(
         IProcessExecutionService processRunner,
         ProjectContext projectContext,
-        IProgressReporter progressReporter)
+        IProgressReporter progressReporter,
+        ILogger<GitService> logger)
     {
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _projectContext = projectContext ?? throw new ArgumentNullException(nameof(projectContext));
         _progressReporter = progressReporter ?? throw new ArgumentNullException(nameof(progressReporter));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<bool> HasUncommittedChangesAsync(CancellationToken ct = default)
@@ -226,6 +230,8 @@ public sealed class GitService : IGitService
             var errorBuilder = new StringBuilder();
             try
             {
+                _logger.LogDebug("Executing: git {Arguments} (Attempt {Attempt}/{Max})", gitArguments, attempt, MaxRemoteRetries);
+
                 int exitCode = await _processRunner.ExecuteAsync(
                     "git",
                     gitArguments,
@@ -237,6 +243,8 @@ public sealed class GitService : IGitService
                 if (exitCode == 0) return;
 
                 string errorDetails = errorBuilder.ToString().Trim();
+                _logger.LogWarning("Git command failed (Exit code {Code}): {Details}", exitCode, errorDetails);
+
                 if (attempt < MaxRemoteRetries && IsTransientRemoteError(errorDetails))
                 {
                     await TriggerRetryDelayAsync(attempt, gitArguments, ct);
@@ -245,19 +253,17 @@ public sealed class GitService : IGitService
 
                 throw new InvalidOperationException($"Git command 'git {gitArguments}' failed with exit code {exitCode}. Error Details: {errorDetails}");
             }
-            catch (TimeoutException) when (attempt < MaxRemoteRetries)
+            catch (TimeoutException ex) when (attempt < MaxRemoteRetries)
             {
-                // The process hung and was killed due to an idle timeout
+                _logger.LogWarning(ex, "Git command timed out: {Arguments}", gitArguments);
                 await _progressReporter.ReportWarningAsync(
                     $"Git process hung on 'git {gitArguments}'. Terminated by Idle Timeout. Cleaning up locks...", ct);
 
-                // Remove any potential phantom Git locks before restarting
                 string lockPath = Path.Combine(_projectContext.WorkingDirectory, ".git", "index.lock");
                 if (File.Exists(lockPath))
                 {
-                    try { File.Delete(lockPath); } catch { /* Ignore cleanup errors */ }
+                    try { File.Delete(lockPath); } catch { }
                 }
-
                 await TriggerRetryDelayAsync(attempt, gitArguments, ct);
             }
         }
