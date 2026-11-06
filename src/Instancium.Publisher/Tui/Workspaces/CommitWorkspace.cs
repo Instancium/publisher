@@ -13,22 +13,16 @@ public sealed class CommitWorkspace : ITuiWorkspace
 {
     private readonly IGitService _gitService;
     private readonly IAiCommitAssistant _aiAssistant;
-    private readonly GitAddAllStep _addStep;
-    private readonly GitCommitAndPushStep _pushStep;
 
     public string Name => "Commit Control Center";
     public string Description => "Stage files and generate AI commit message (Streaming)";
 
     public CommitWorkspace(
         IGitService gitService,
-        IAiCommitAssistant aiAssistant,
-        GitAddAllStep addStep,
-        GitCommitAndPushStep pushStep)
+        IAiCommitAssistant aiAssistant)
     {
         _gitService = gitService;
         _aiAssistant = aiAssistant;
-        _addStep = addStep;
-        _pushStep = pushStep;
     }
 
     public async Task ExecuteAsync(CancellationToken ct = default)
@@ -39,8 +33,7 @@ public sealed class CommitWorkspace : ITuiWorkspace
         {
             await TuiProgressReporter.RunWithLiveStatusAsync(
                 "Staging files and analyzing diff...",
-                async () => await _addStep.ExecuteAsync(ct),
-                ct);
+                async () => await _gitService.AddAllAsync(ct),ct);
 
             string diff = await _gitService.GetCachedDiffAsync(ct);
             string diffStat = await _gitService.GetCachedDiffStatAsync(ct);

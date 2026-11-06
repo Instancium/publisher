@@ -50,8 +50,6 @@ internal static class Program
 
                 services.AddTransient<BumpVersionStep>();
                 services.AddTransient<GenerateCommitMessageStep>();
-                services.AddTransient<GitAddAllStep>();
-                services.AddTransient<GitCommitAndPushStep>();
                 services.AddTransient<MergeAndPublishStep>();
 
                 services.AddTransient<ITuiWorkspace, CommitWorkspace>();
