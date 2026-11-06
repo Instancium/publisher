@@ -58,12 +58,10 @@ Full lifecycle version management:
 ### Transactional Execution & Safe Rollbacks
 Session state persistence allows interrupted releases to resume or safely perform destructive rollbacks. Your Git history is protected.
 
-### AI Changelog Sanitization
-Built-in filters automatically strip release-engineering noise:
-- Version bump commits
-- Backport operations
-- Merge commits from release branches
-- Generated files (`.min.js`, lock files, binaries)
+### AI Changelog Sanitization & Payload Optimization
+Built-in filters automatically strip release-engineering noise and optimize payloads before LLM processing:
+- **Diff payload optimization:** Strips whitespace, limits context lines, and truncates massive hunks to prevent LLM attention dilution.
+- **Commit log sanitization:** Ignores version bump commits, backport operations, merge commits from release branches, and generated files (`.min.js`, lock files, binaries).
 
 ## Installation
 
@@ -92,8 +90,14 @@ Create `appsettings.json` in the project root:
     "AiGatewayUrl": "http://localhost:5000",
     "AiModelId": "qwen3-vl-8b-instruct",
     "AiApiKey": "your-instantaigate-access-token",
+    "DiffOptimization": {
+      "Enabled": true,
+      "ContextLines": 0,
+      "IgnoreWhitespace": true,
+      "MaxHunkLines": 80
+    },
     "RegisteredProjects": {
-      "MyAwesomeApp": "C:\\path\\to\\MyAwesomeApp.csproj",
+      "MyAwesomeApp": "C:\\path\\to\\MyAwesomeApp",
       "AnotherRepo": "D:\\repos\\another-repo"
     }
   }
@@ -108,7 +112,11 @@ Create `appsettings.json` in the project root:
 | `AiModelId` | `qwen3-vl-8b-instruct` | Model identifier on the gateway |
 | `AiApiKey` | `""` | Bearer token for SignalR authentication |
 | `MaxChunkLength` | `3000` | Configuration chunk size limit |
-| `RegisteredProjects` | `{}` | Dictionary of project name → `.csproj` path |
+| `DiffOptimization.Enabled` | `true` | Enables Git diff payload sanitization |
+| `DiffOptimization.ContextLines` | `0` | Number of context lines in Git diff (`-U0`) |
+| `DiffOptimization.IgnoreWhitespace` | `true` | Ignores whitespace changes (`-w --ignore-blank-lines`) |
+| `DiffOptimization.MaxHunkLines` | `80` | Maximum continuous lines to show before truncating the hunk |
+| `RegisteredProjects` | `{}` | Dictionary of project name → repository root directory path |
 
 ## Usage
 
@@ -133,16 +141,16 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 ### Commit Control Center
 
 1. Stages all changes (`git add -A`)
-2. Analyzes the diff and sends to AI
+2. Analyzes the diff, applies configured sanitization rules, and sends to AI
 3. Streams generated commit message in real-time
 4. User approves or aborts
 5. Commits and pushes to current branch
 
 ### Release Master & Recovery
 
-1. Reads current version from `.csproj`
+1. Reads current version by discovering all `.csproj` files in the repository root
 2. User selects version bump strategy
-3. Bumps version in project file
+3. Bumps version in project files across the repository
 4. Creates release branch (`release-prep/v{version}`)
 5. Generates changelog from commit history (filtered by AI)
 6. User approves changelog

@@ -1,8 +1,6 @@
 ﻿using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Exceptions;
 using Instancium.Publisher.Core.Interfaces;
-using System.Globalization;
-using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 

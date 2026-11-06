@@ -1,8 +1,8 @@
 ﻿namespace Instancium.Publisher.Core.Interfaces;
 
+using Instancium.Publisher.Core.Domain;
 using System.Threading;
 using System.Threading.Tasks;
-using Instancium.Publisher.Core.Domain;
 
 /// <summary>
 /// Provides read-only runtime diagnostics and environment metadata.

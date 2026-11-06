@@ -1,8 +1,8 @@
 namespace Instancium.Publisher.Tests.Domain;
 
+using Instancium.Publisher.Core.Domain;
 using System;
 using System.Collections.Generic;
-using Instancium.Publisher.Core.Domain;
 using Xunit;
 
 /// <summary>

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Instancium.Publisher.Core.Exceptions;
+﻿namespace Instancium.Publisher.Core.Exceptions;
 
 /// <summary>
 /// Thrown when a discovered project file exists on disk but cannot be parsed as MSBuild XML.

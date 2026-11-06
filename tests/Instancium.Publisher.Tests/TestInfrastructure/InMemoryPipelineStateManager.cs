@@ -1,9 +1,9 @@
 namespace Instancium.Publisher.Tests.TestInfrastructure;
 
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.State;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 /// <summary>
 /// In-memory test double for IPipelineStateManager capturing every saved snapshot,

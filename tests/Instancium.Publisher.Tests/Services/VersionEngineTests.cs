@@ -1,13 +1,13 @@
 namespace Instancium.Publisher.Tests.Services;
 
+using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Services.Versioning;
+using Instancium.Publisher.Tests.TestInfrastructure;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Instancium.Publisher.Core.Domain;
-using Instancium.Publisher.Services.Versioning;
-using Instancium.Publisher.Tests.TestInfrastructure;
 using Xunit;
 
 /// <summary>
