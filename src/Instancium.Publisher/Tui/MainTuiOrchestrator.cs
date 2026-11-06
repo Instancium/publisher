@@ -3,14 +3,15 @@
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.State;
+using Instancium.Publisher.Tui.Components;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.IO;
 
 public sealed class MainTuiOrchestrator
 {
@@ -21,13 +22,7 @@ public sealed class MainTuiOrchestrator
     private readonly ProjectContext _projectContext;
     private readonly IEnvironmentInfoProvider _infoProvider;
 
-    // Helper record for custom menu item rendering
     private record MenuChoice(string? Key, string Display);
-
-    // The file is truncated in the output, but the remaining logic is already in English.
-    // This change focuses on translating the visible Russian comments only.
-
-    // The rest of the file appears to already be in English.
 
     public MainTuiOrchestrator(
         IEnumerable<ITuiWorkspace> workspaces,
@@ -80,6 +75,7 @@ public sealed class MainTuiOrchestrator
                 "Please add a 'Projects' dictionary to your appsettings.json.");
             return false;
         }
+
         if (_settings.RegisteredProjects.Keys.Contains(ExitMenuLabel, StringComparer.OrdinalIgnoreCase))
         {
             RenderFatalConfigurationError(
@@ -87,6 +83,7 @@ public sealed class MainTuiOrchestrator
                 "Rename the conflicting project key in appsettings.json.");
             return false;
         }
+
         if (_workspaces.Any(w => string.Equals(w.Name, ExitMenuLabel, StringComparison.OrdinalIgnoreCase)))
         {
             RenderFatalConfigurationError(
@@ -94,6 +91,7 @@ public sealed class MainTuiOrchestrator
                 "Rename the conflicting workspace.");
             return false;
         }
+
         return true;
     }
 
@@ -110,17 +108,14 @@ public sealed class MainTuiOrchestrator
         string version = _infoProvider.GetApplicationVersion();
         string modelId = _settings.AiModelId ?? "Unknown Model";
 
-        // Large ASCII logo
         AnsiConsole.Write(
             new FigletText("Publisher")
                 .LeftJustified()
                 .Color(Color.Cyan1));
 
-        // Subtitle
         AnsiConsole.MarkupLine($"[bold blue]Instancium Publisher CLI[/] [dim]v{Markup.Escape(version)}[/]");
         AnsiConsole.MarkupLine("[grey]AI-Powered Release & Commit Automation Pipeline[/]\n");
 
-        // Information panel (status, paths, model)
         var grid = new Grid()
             .AddColumn(new GridColumn().PadRight(2))
             .AddColumn(new GridColumn());
@@ -128,9 +123,6 @@ public sealed class MainTuiOrchestrator
         grid.AddRow("[dim]Active AI Engine:[/]", $"[cyan]{Markup.Escape(modelId)}[/]");
         grid.AddRow("[dim]Loaded Projects:[/]", $"[white]{_settings.RegisteredProjects.Count}[/]");
         grid.AddRow("[dim]Gateway URL:[/]", $"[dim]{Markup.Escape(_settings.AiGatewayUrl ?? "N/A")}[/]");
-        grid.AddRow("[dim][/]");
-        grid.AddRow("[dim]Select Target Repository Context[/]", $"[dim]👇[/]");
-
 
         AnsiConsole.Write(
             new Panel(grid)
@@ -145,23 +137,16 @@ public sealed class MainTuiOrchestrator
         AnsiConsole.Clear();
         RenderAppHero();
 
-        int maxNameLength = _settings.RegisteredProjects.Keys.Any()
-            ? _settings.RegisteredProjects.Keys.Max(k => k.Length)
-            : 20;
+        AnsiConsole.WriteLine();
+        NavigationBreadcrumbsBar.Render("Projects", "Select Target Repository Context");
 
- 
-        int padding = maxNameLength + 4;
+        var formattedProjects = TwoColumnMenuFormatter.FormatRows(
+            _settings.RegisteredProjects.ToList(),
+            kvp => kvp.Key,
+            kvp => kvp.Value);
 
-        var choices = _settings.RegisteredProjects
-            .Select(kvp =>
-            {
-                
-                string paddedName = kvp.Key.PadRight(padding);
-
-                return new MenuChoice(
-                    kvp.Key,
-                    $"[bold white]{Markup.Escape(paddedName)}[/][dim]{Markup.Escape(kvp.Value)}[/]");
-            })
+        var choices = formattedProjects
+            .Select(kvp => new MenuChoice(kvp.Key.Key, kvp.Value))
             .ToList();
 
         choices.Add(new MenuChoice(null, "[grey]Exit Application[/]"));
@@ -172,7 +157,7 @@ public sealed class MainTuiOrchestrator
                 .HighlightStyle(new Style(Color.Cyan, decoration: Decoration.Bold))
                 .MoreChoicesText("[grey](Move up and down to reveal more projects)[/]")
                 .AddChoices(choices)
-                .UseConverter(c => c.Display)); 
+                .UseConverter(c => c.Display));
 
         return selected.Key;
     }
@@ -184,27 +169,35 @@ public sealed class MainTuiOrchestrator
         _projectContext.WorkingDirectory = targetPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
             ? Path.GetDirectoryName(targetPath) ?? string.Empty
             : targetPath;
+
         Environment.CurrentDirectory = _projectContext.WorkingDirectory;
     }
 
     private async Task<bool> RunWorkspaceSelectionCycleAsync(CancellationToken ct)
     {
         AnsiConsole.Clear();
-
         string version = _infoProvider.GetApplicationVersion();
         AnsiConsole.Write(new Rule($"[bold cyan]Instancium.Publisher[/] [dim]v{Markup.Escape(version)}[/]").LeftJustified().RuleStyle("grey"));
 
         await RenderDashboardAsync(ct);
 
-        var choices = _workspaces
-            .Select(w => new MenuChoice(w.Name, $"[white]{Markup.Escape(w.Name)}[/] [dim]- {Markup.Escape(w.Description)}[/]"))
+        AnsiConsole.WriteLine();
+        NavigationBreadcrumbsBar.Render("Projects", _projectContext.Name, "Select Action");
+
+        var workspaceList = _workspaces.ToList();
+        var formattedWorkspaces = TwoColumnMenuFormatter.FormatRows(
+            workspaceList,
+            w => w.Name,
+            w => w.Description);
+
+        var choices = formattedWorkspaces
+            .Select(kvp => new MenuChoice(kvp.Key.Name, kvp.Value))
             .ToList();
 
         choices.Add(new MenuChoice(null, "[grey]Return to Project Selection[/]"));
 
         var selected = AnsiConsole.Prompt(
             new SelectionPrompt<MenuChoice>()
-                .Title("\n[cyan]Select Action:[/]")
                 .PageSize(8)
                 .HighlightStyle(new Style(Color.Cyan, decoration: Decoration.Bold))
                 .AddChoices(choices)
@@ -216,13 +209,11 @@ public sealed class MainTuiOrchestrator
         }
 
         var activeWorkspace = _workspaces.First(w => w.Name == selected.Key);
-
         AnsiConsole.Clear();
         AnsiConsole.Write(new Rule($"[cyan]{Markup.Escape(activeWorkspace.Name)}[/]").LeftJustified().RuleStyle("grey"));
         AnsiConsole.MarkupLine($"[dim]{Markup.Escape(activeWorkspace.Description)}[/]\n");
 
         await activeWorkspace.ExecuteAsync(ct);
-
         return true;
     }
 
@@ -245,7 +236,6 @@ public sealed class MainTuiOrchestrator
             string pendingChanges = !hasChanges
                 ? "[green]Clean[/]"
                 : "[yellow]Uncommitted modifications[/]";
-
             string unpushed = hasUnpushed ? " [dim red](Unpushed commits)[/]" : "";
 
             table.AddRow("[dim]Git Status[/]", pendingChanges + unpushed);
