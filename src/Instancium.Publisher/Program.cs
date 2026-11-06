@@ -32,8 +32,6 @@ internal static class Program
             {
                 logging.ClearProviders();
                 logging.SetMinimumLevel(LogLevel.Information);
-                // В реальном приложении здесь можно добавить файловый логгер,
-                // например: logging.AddFile("logs/publisher-{Date}.txt");
             })
             .ConfigureServices((context, services) =>
             {
@@ -55,7 +53,6 @@ internal static class Program
                 services.AddTransient<GitAddAllStep>();
                 services.AddTransient<GitCommitAndPushStep>();
                 services.AddTransient<MergeAndPublishStep>();
-                services.AddTransient<RunUnitTestsStep>();
 
                 services.AddTransient<ITuiWorkspace, CommitWorkspace>();
                 services.AddTransient<ITuiWorkspace, ReleaseWorkspace>();

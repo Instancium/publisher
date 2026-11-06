@@ -21,7 +21,6 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
     private readonly IGitService _gitService;
     private readonly BumpVersionStep _bumpStep;
     private readonly MergeAndPublishStep _publishStep;
-    private readonly RunUnitTestsStep _unitTestsStep;
     private readonly IAiCommitAssistant _aiAssistant;
     private readonly ProjectContext _projectContext;
     private readonly IVersionEngine _versionEngine;
@@ -33,7 +32,6 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         IGitService gitService,
         BumpVersionStep bumpStep,
         MergeAndPublishStep publishStep,
-        RunUnitTestsStep unitTestsStep,
         IAiCommitAssistant aiAssistant,
         ProjectContext projectContext,
         IVersionEngine versionEngine,
@@ -44,7 +42,6 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         _gitService = gitService;
         _bumpStep = bumpStep;
         _publishStep = publishStep;
-        _unitTestsStep = unitTestsStep;
         _aiAssistant = aiAssistant;
         _projectContext = projectContext;
         _versionEngine = versionEngine;
@@ -116,32 +113,8 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
 
             if (activeContext.CurrentStep <= 1)
             {
-                // Guarantee a clean slate before executing release tests and version bumping
+                // Guarantee a clean slate before executing release steps
                 await _gitService.EnsureCleanWorkingDirectoryAsync(ct);
-
-                // Опциональный запуск тестов
-                AnsiConsole.WriteLine();
-                NavigationBreadcrumbsBar.Render("Projects", _projectContext.Name, "Release", "Pre-flight Checks");
-
-                var testChoice = AnsiConsole.Prompt(
-                    new SelectionPrompt<string>()
-                        .Title("Run automated test suite before release?")
-                        .HighlightStyle(new Style(Color.Cyan, decoration: Decoration.Bold))
-                        .AddChoices("Run Tests", "Skip Tests"));
-
-                if (testChoice == "Run Tests")
-                {
-                    await TuiProgressReporter.RunWithLiveStatusAsync(
-                        "Executing automated test suite before release...",
-                        async () => await _unitTestsStep.ExecuteAsync(_projectContext.WorkingDirectory, ct),
-                        ct);
-
-                    AnsiConsole.MarkupLine("[green]Pre-release test suite passed successfully.[/]");
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine("[yellow]Automated test suite skipped by user.[/]");
-                }
 
                 string repositoryRoot = await _gitService.GetRepositoryRootAsync(ct);
                 IReadOnlyList<string> projectPaths = await _projectDiscovery.DiscoverProjectFilesAsync(repositoryRoot, ct);
