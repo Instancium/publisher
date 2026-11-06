@@ -8,15 +8,19 @@
 
 Instancium Publisher eliminates the friction between writing code and shipping releases. It orchestrates Git workflows, semantic versioning, and publishing pipelines — all backed by real-time LLM inference through [InstantAIGate](https://github.com/Instancium/instant-ai-gate).
 
----
 
 ## What It Does
 
-- **Generates commit messages** from staged diffs using AI, streaming tokens in real-time
-- **Creates release changelogs** by analyzing commit history and filtering out noise (version bumps, backports, merge commits)
-- **Manages semantic versions** with full SemVer 2.0 support (major/minor/patch, pre-releases, custom bumps)
-- **Publishes releases** end-to-end: branch creation, merging, tagging, GitHub Release creation
-- **Recovers from failures** with transactional state persistence — resume or rollback interrupted releases
+> 
+> Instancium Publisher solves the fundamental flaws of server-side release automation by applying a **Shift-Left** architecture. It moves fragile CI/CD bash scripts directly to the developer's machine, orchestrating the workflow through a robust local State Machine.
+> 
+
+- **Shifts release orchestration left:** Keeps your local working tree and remote branches perfectly synchronized, eliminating "non-fast-forward" push errors caused by server-side AI commits.
+- **Generates commit messages** from staged diffs using AI, streaming tokens in real-time to keep the human in the loop as the final validator.
+- **Creates release changelogs** by analyzing commit history and filtering out noise (version bumps, backports, merge commits).
+- **Manages semantic versions** with full SemVer 2.0 support (major/minor/patch, pre-releases, custom bumps).
+- **Publishes releases** end-to-end: branch creation, merging, tagging, and GitHub Release creation.
+- **Recovers from failures** using transactional state persistence — operating as a local State Machine that allows you to safely resume or rollback interrupted distributed Git operations.
 
 ## Why Use It
 
@@ -75,9 +79,10 @@ Built-in filters automatically strip release-engineering noise and optimize payl
 ### Build from Source
 
 ```bash
-git clone https://github.com/instancium/publisher.git
+git clone [https://github.com/instancium/publisher.git](https://github.com/instancium/publisher.git)
 cd Instancium.Publisher
 dotnet build src/Instancium.Publisher/Instancium.Publisher.csproj -c Release
+
 ```
 
 ## ⚙️ Configuration
@@ -102,12 +107,13 @@ Create `appsettings.json` in the project root:
     }
   }
 }
+
 ```
 
 ### Configuration Options
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --- | --- | --- |
 | `AiGatewayUrl` | `http://localhost:5000` | InstantAIGate server URL |
 | `AiModelId` | `qwen3-vl-8b-instruct` | Model identifier on the gateway |
 | `AiApiKey` | `""` | Bearer token for SignalR authentication |
@@ -128,6 +134,7 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 
 # Or run the compiled binary
 ./Instancium.Publisher
+
 ```
 
 ### Workflow
@@ -135,8 +142,10 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 1. **Select Target Repository** — Choose from `RegisteredProjects` in `appsettings.json`
 2. **View Dashboard** — Active branch, pending changes, target path
 3. **Select Workspace**:
-   - **Commit Control Center** — Stage files, generate AI commit message, push to remote
-   - **Release Master & Recovery** — End-to-end release pipeline with rollback capability
+* **Commit Control Center** — Stage files, generate AI commit message, push to remote
+* **Release Master & Recovery** — End-to-end release pipeline with rollback capability
+
+
 
 ### Commit Control Center
 
@@ -160,17 +169,18 @@ dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj
 10. Cleans up release branch
 
 **Recovery**: If the process crashes or is interrupted, state is saved to disk. On restart, you can:
-- **Resume** — Continue from the last checkpoint
-- **Rollback** — Destructive reset to clean state
-- **Start Fresh** — Discard state and begin new release
+
+* **Resume** — Continue from the last checkpoint
+* **Rollback** — Destructive reset to clean state
+* **Start Fresh** — Discard state and begin new release
 
 ## Safety & Validation
 
-- **Clean Working Tree**: Publishing pipelines reject execution if uncommitted changes are present
-- **State Persistence**: Interrupted releases can be resumed or rolled back
-- **Ephemeral AI Sessions**: All inference sessions are marked ephemeral — KV-cache is released on disconnect
-- **Destructive Rollback**: Requires explicit user confirmation; performs `git reset --hard` and `git clean -fd`
-- **Deterministic Merge Strategy**: During release and backport operations, the pipeline automatically resolves any Git conflicts in favor of the incoming release branch. This ensures that the exact versions and file states prepared by the pipeline are enforced without manual intervention, while perfectly preserving the Git merge history graph.
+* **Clean Working Tree**: Publishing pipelines reject execution if uncommitted changes are present
+* **State Persistence**: Interrupted releases can be resumed or rolled back
+* **Ephemeral AI Sessions**: All inference sessions are marked ephemeral — KV-cache is released on disconnect
+* **Destructive Rollback**: Requires explicit user confirmation; performs `git reset --hard` and `git clean -fd`
+* **Deterministic Merge Strategy**: During release and backport operations, the pipeline automatically resolves any Git conflicts in favor of the incoming release branch. This ensures that the exact versions and file states prepared by the pipeline are enforced without manual intervention, while perfectly preserving the Git merge history graph.
 
 ## Architecture Overview
 
@@ -193,6 +203,7 @@ Instancium Publisher is **decoupled from inference runtimes**. It does not embed
                  │< - - - - - - - - - - - - - - - - - - - - - - - - -┤
                  │ 5. LeaveSession / DestroySession                  │
                  ├──────────────────────────────────────────────────>│
+
 ```
 
 ## .NET Ecosystem Focus
@@ -201,10 +212,28 @@ Instancium Publisher is **decoupled from inference runtimes**. It does not embed
 
 The internal `VersionEngine` parses XML-based project manifests (`.csproj`, `Directory.Build.props`) to read and update the `<Version>` tag. Support for non-XML manifests (e.g., `package.json` for Node.js) is **not implemented**.
 
+
+## ⚠️ Versioning & Stability Policy
+
+Instancium Publisher follows a pragmatic variant of Semantic Versioning.
+
+### Pre-2.0 Status
+Until version 2.0.0 is released, the tool is considered to be in a stabilization track (1.x line) until the entire product ecosystem reaches its goals. The public CLI behavior and configuration schemas are not strictly frozen.
+
+### Version Components
+
+| Segment | Meaning |
+| :--- | :--- |
+| **Major** (2.x.y) | Reserved for the first stable release (2.0.0). Subsequent major updates reflect fundamental architectural shifts or major roadmap milestones. |
+| **Minor** (x.Y.0) | Will be incremented when changes are made to configuration files (e.g., `appsettings.json`), launch strategies, or integrations with external systems. Review the release notes before upgrading. |
+| **Patch** (x.y.Z) | Bug fixes that do not alter the integration rules. Existing configurations remain safe to use. |
+
+
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 — see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
 
 ## 📞 Support
 
-For issues, feature requests, or questions, please [open an issue](https://github.com/instancium/Publisher/issues).
+For issues, feature requests, or questions, please [open an issue](https://www.google.com/search?q=https://github.com/instancium/Publisher/issues).
+
