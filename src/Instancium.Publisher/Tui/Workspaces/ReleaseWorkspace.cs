@@ -473,7 +473,6 @@ public sealed class ReleaseWorkspace(
             {
                 string content = trimLine[1..].Trim();
                 content = content.Replace("**Executive Summary**", "[bold cyan]Executive Summary[/]");
-                content = content.Replace("_", "");
                 summaryBuilder.AppendLine(content);
             }
             else if (trimLine.StartsWith("|"))
