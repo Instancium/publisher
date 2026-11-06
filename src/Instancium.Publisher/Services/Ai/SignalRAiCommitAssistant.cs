@@ -35,6 +35,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     /// </summary>
     private readonly ConcurrentDictionary<string, bool> _boundSessions = new();
     private readonly IProgressReporter _progressReporter;
+    private readonly IDiffPayloadOptimizer _diffOptimizer;
 
     private static readonly HashSet<string> IgnoredExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -51,9 +52,11 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
 
     public SignalRAiCommitAssistant(
         IOptions<PublisherSettings> settings,
-        IProgressReporter progressReporter)
+        IProgressReporter progressReporter,
+        IDiffPayloadOptimizer diffOptimizer)
     {
         ArgumentNullException.ThrowIfNull(progressReporter);
+        ArgumentNullException.ThrowIfNull(diffOptimizer);
         var config = settings.Value;
         string baseUrl = config.AiGatewayUrl ?? "http://localhost:5000";
         string hubPath = "/hub/gateway";
@@ -61,6 +64,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         _apiKey = config.AiApiKey ?? string.Empty;
         _modelId = config.AiModelId ?? "qwen3-vl-8b-instruct";
         _progressReporter = progressReporter;
+        _diffOptimizer = diffOptimizer;
     }
 
     private void AbortAllActiveStreams(Exception exception)
@@ -359,19 +363,21 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         string diffStat,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        var totalFileStatuses = ExtractFileStatuses(diff);
+        string optimizedDiff = _diffOptimizer.Optimize(diff);
+
         var modelDetails = await GetActiveModelDetailsAsync(ct);
         int contextSize = modelDetails.ContextSize > 0 ? modelDetails.ContextSize : 4096;
         const int systemPromptTokens = 400;
         const int reserveTokens = 512;
         int usableTokens = Math.Max(512, contextSize - systemPromptTokens - reserveTokens);
         int safeChunkChars = (int)(usableTokens * 2.0);
-        var totalFileStatuses = ExtractFileStatuses(diff);
-        if (diff.Length <= safeChunkChars)
+        if (optimizedDiff.Length <= safeChunkChars)
         {
             string sessionId = $"diff-direct-{Guid.NewGuid():N}";
             try
             {
-                string prompt = BuildFinalCommitPrompt(diff, diffStat, totalFileStatuses);
+                string prompt = BuildFinalCommitPrompt(optimizedDiff, diffStat, totalFileStatuses);
                 var deltaMessage = new ChatMessage("user", prompt);
                 await foreach (var token in StreamChatAsync(sessionId, _modelId, deltaMessage, ct))
                 {
@@ -385,7 +391,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
             yield break;
         }
         await _progressReporter.ReportAsync(
-            $"Diff exceeds single chunk capacity ({diff.Length} chars > {safeChunkChars} safe limit). Engaging Checkpointed Map-Reduce...",
+            $"Diff exceeds single chunk capacity ({optimizedDiff.Length} chars > {safeChunkChars} safe limit). Engaging Checkpointed Map-Reduce...",
             ct);
         string pipelineSessionId = $"diff-pipeline-{Guid.NewGuid():N}";
         try
@@ -402,7 +408,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
             var initMessage = new ChatMessage("system", systemPrompt);
             await ConsumeStreamAsync(pipelineSessionId, initMessage, ct);
             int sysCheckpoint = await GetSessionTokenCountAsync(pipelineSessionId, ct);
-            var chunks = ChunkDiffByFiles(diff, safeChunkChars);
+            var chunks = ChunkDiffByFiles(optimizedDiff, safeChunkChars);
             var partialSummaries = new List<string>();
             for (int i = 0; i < chunks.Count; i++)
             {
@@ -754,6 +760,13 @@ YOUR TURN (Generate ONLY the commit message):
                 currentStatus = "MODIFIED";
                 continue;
             }
+            if (line.StartsWith("## File: "))
+            {
+                if (currentFile != null) result.Add(new FileDiffStatus(currentFile, currentStatus));
+                currentFile = line["## File: ".Length..].Trim();
+                currentStatus = "MODIFIED";
+                continue;
+            }
             if (line.StartsWith("new file mode")) currentStatus = "ADDED";
             else if (line.StartsWith("deleted file mode")) currentStatus = "DELETED";
             else if (line.StartsWith("similarity index") || line.StartsWith("rename from")) currentStatus = "RENAMED";
@@ -772,14 +785,21 @@ YOUR TURN (Generate ONLY the commit message):
         string currentFileName = string.Empty;
         while ((line = reader.ReadLine()) != null)
         {
-            if (line.StartsWith("diff --git"))
+            if (line.StartsWith("diff --git") || line.StartsWith("## File: "))
             {
-                var parts = line.Split(' ');
-                string targetPath = parts.Length >= 4 ? parts[3] : (parts.Length >= 3 ? parts[2] : string.Empty);
-                targetPath = targetPath.Trim('"');
-                currentFileName = targetPath.StartsWith("b/") || targetPath.StartsWith("a/")
-                    ? targetPath[2..]
-                    : targetPath;
+                if (line.StartsWith("## File: "))
+                {
+                    currentFileName = line["## File: ".Length..].Trim();
+                }
+                else
+                {
+                    var parts = line.Split(' ');
+                    string targetPath = parts.Length >= 4 ? parts[3] : (parts.Length >= 3 ? parts[2] : string.Empty);
+                    targetPath = targetPath.Trim('"');
+                    currentFileName = targetPath.StartsWith("b/") || targetPath.StartsWith("a/")
+                        ? targetPath[2..]
+                        : targetPath;
+                }
                 isCurrentFileIgnored = IsGeneratedOrBinary(currentFileName);
                 if (currentChunk.Length > 0 && currentChunk.Length + line.Length > maxLength)
                 {

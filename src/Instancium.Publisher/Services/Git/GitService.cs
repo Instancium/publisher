@@ -1,9 +1,11 @@
 namespace Instancium.Publisher.Services.Git;
 
+using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.State;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.IO;
 using System.Linq;
@@ -21,17 +23,20 @@ public sealed class GitService : IGitService
     private readonly ProjectContext _projectContext;
     private readonly IProgressReporter _progressReporter;
     private readonly ILogger<GitService> _logger;
+    private readonly PublisherSettings _settings;
 
     public GitService(
         IProcessExecutionService processRunner,
         ProjectContext projectContext,
         IProgressReporter progressReporter,
-        ILogger<GitService> logger)
+        ILogger<GitService> logger,
+        IOptions<PublisherSettings> settings)
     {
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _projectContext = projectContext ?? throw new ArgumentNullException(nameof(projectContext));
         _progressReporter = progressReporter ?? throw new ArgumentNullException(nameof(progressReporter));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
     }
 
     public async Task<bool> HasUncommittedChangesAsync(CancellationToken ct = default)
@@ -64,8 +69,22 @@ public sealed class GitService : IGitService
 
     public Task AddAllAsync(CancellationToken ct = default) => ExecuteNoOutputAsync("add -A", ct);
 
-    public Task<string> GetCachedDiffAsync(CancellationToken ct = default) =>
-        _processRunner.GetOutputAsync("git", "diff --cached -M", _projectContext.WorkingDirectory, ct);
+    public Task<string> GetCachedDiffAsync(CancellationToken ct = default)
+    {
+        var opt = _settings.DiffOptimization;
+        string args = "diff --cached -M";
+
+        if (opt.Enabled)
+        {
+            args += $" -U{opt.ContextLines}";
+            if (opt.IgnoreWhitespace)
+            {
+                args += " -w --ignore-blank-lines";
+            }
+        }
+
+        return _processRunner.GetOutputAsync("git", args, _projectContext.WorkingDirectory, ct);
+    }
 
     public Task<string> GetCachedDiffStatAsync(CancellationToken ct = default) =>
         _processRunner.GetOutputAsync("git", "diff --cached -M --stat", _projectContext.WorkingDirectory, ct);
