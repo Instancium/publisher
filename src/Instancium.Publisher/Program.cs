@@ -45,6 +45,7 @@ internal static class Program
                 services.AddSingleton<IGitService, GitService>();
                 services.AddSingleton<IVersionEngine, VersionEngine>();
                 services.AddSingleton<IPipelineStateManager, PipelineStateManager>();
+                services.AddSingleton<IDiffPayloadOptimizer, RegexDiffPayloadOptimizer>();
                 services.AddSingleton<IAiCommitAssistant, SignalRAiCommitAssistant>();
                 services.AddSingleton<IProjectDiscoveryService, ProjectDiscoveryService>();
 
