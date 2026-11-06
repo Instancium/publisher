@@ -4,16 +4,17 @@ using Instancium.Publisher.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
 /// <summary>
-/// Manages persistent release pipeline state scoped to the target repository working directory.
+/// Manages persistent release pipeline state in the system temporary directory,
+/// isolated per target repository to prevent polluting the Git working tree.
 /// </summary>
 public sealed class PipelineStateManager : IPipelineStateManager
 {
-    private const string StateFileName = ".instancium_pipeline_state.json";
-
     private readonly ProjectContext _projectContext;
     private readonly ILogger<PipelineStateManager> _logger;
 
@@ -23,8 +24,20 @@ public sealed class PipelineStateManager : IPipelineStateManager
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private string ResolveStateFilePath() => 
-        Path.Combine(_projectContext.WorkingDirectory, StateFileName);
+    private string ResolveStateFilePath()
+    {
+        string tempDirectory = Path.Combine(Path.GetTempPath(), "Instancium.Publisher");
+        Directory.CreateDirectory(tempDirectory);
+
+        string normalizedRepoPath = Path.GetFullPath(_projectContext.WorkingDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .ToUpperInvariant();
+
+        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedRepoPath));
+        string shortHash = Convert.ToHexString(hashBytes)[..16].ToLowerInvariant();
+
+        return Path.Combine(tempDirectory, $"pipeline_state_{shortHash}.json");
+    }
 
     public async Task SaveAsync(PipelineContext context)
     {
