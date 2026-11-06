@@ -22,30 +22,46 @@ Instancium Publisher eliminates the friction between writing code and shipping r
 - **Publishes releases** end-to-end: branch creation, merging, tagging, and GitHub Release creation.
 - **Recovers from failures** using transactional state persistence — operating as a local State Machine that allows you to safely resume or rollback interrupted distributed Git operations.
 
+## What It Does
+
+> Instancium Publisher replaces fragile, black-box server-side release scripts with a robust **Local-First Orchestration** model. By shifting AI generation and workflow validation directly to the developer's workstation, it guarantees complete human-in-the-loop oversight before a single remote ref is altered.
+
+- **Shift-Left AI Validation:** Optimizes and cleanses raw Git diffs directly on the source machine, preventing "garbage-in, garbage-out" scenarios before sending payloads to the LLM gateway.
+- **Elimotes Upstream Desyncs:** Generates and validates AI commits locally, completely eliminating the "non-fast-forward" push errors and detached-HEAD states common with autonomous server-side CI tagging.
+- **Interactive AI Commit Generation:** Streams LLM tokens in real-time **at the exact moment you prepare a commit**. This guarantees strict human-in-the-loop validation, requiring your explicit approval before the AI-generated Conventional Commit message is ever written to your local Git history.
+- **Noise-Filtered Changelogs:** Analyzes local commit logs, automatically stripping out version bumps, merge commits, and dependency updates to compile clean, human-readable release notes.
+- **Deterministic SemVer 2.0 Management:** Provides full lifecycle version bumping (including stable, pre-release, and custom strategies) with deep validation of XML project manifests.
+- **Stateful Git Recovery:** Operates as a local transactional State Machine. If a network drop or API error interrupts a multi-branch release, the tool safely resumes from the last checkpoint or executes an atomic rollback.
+
 ## Why Use It
 
-### The Problem
+### The Problem with Server-Side Release Automation
 
-Release engineering is repetitive and error-prone:
-- Writing meaningful commit messages takes time
-- Changelogs require manual curation to exclude noise
-- Version bumping follows predictable patterns but is still manual
-- Publishing involves multiple Git operations that can fail mid-way
-- Recovering from interrupted releases requires manual cleanup
+Entrusting AI generation and multi-branch Git orchestration to remote CI/CD runners introduces significant operational hurdles:
+- **Blind AI Commits:** Server-side LLM steps often produce out-of-context or inaccurate commit messages that bypass human review until they hit the main branch.
+- **Brittle Bash Orchestration:** CI pipelines rely on long, unmaintainable shell scripts that lack proper state management, turning mid-release failures into manual cleanup nightmares.
+- **Distributed State Conflicts:** When a server-side runner bumps versions and pushes tags back to the repository, it frequently breaks local developer working trees due to branch desynchronization.
+- **Context Window Dilution:** Pushing raw, unoptimized diffs (including lockfiles and minified assets) to remote AI endpoints inflates token costs and degrades LLM performance.
+- **Version Bumping is a Chore:** Synchronizing versions across multiple `.csproj` files relies on tedious manual updates, error-prone find-and-replace, or over-engineered build scripts.
 
-### The Solution
+### The Solution: Local-First Control
 
-Instancium Publisher automates the entire release workflow:
+Instancium Publisher brings predictability, transactionality, and human verification back to the release process:
 
-1. **Stage changes** → AI analyzes the diff and generates a Conventional Commit message
-2. **Bump version** → Choose from 9 strategies (Patch, Minor, Major, Pre-Release variants, Custom)
-3. **Generate changelog** → AI filters commit history and produces clean release notes
-4. **Publish** → Automated merge to `main`, tag creation, GitHub Release, backport to source branch
-5. **Recover** → If anything fails, resume from the last checkpoint or rollback safely
+1. **Stage & Optimize** → The tool slices out noise from your diff (`-w`, `-U0`, hunk truncation) and feeds a clean payload to the local AI client.
+2. **Review In-Flight** → You validate and approve the AI-generated conventional commit message *before* it gets baked into the Git history.
+3. **Transactional Bump & Prep** → The internal state machine locks the session, creates a `release-prep/` branch, and updates internal manifests deterministically.
+4. **Isolated Release Execution** → Merging, tag creation, and GitHub Release compilation happen through a sequence of atomic local operations.
+5. **Fail-Safe Recovery** → If a step fails (e.g., GitHub API timeout), your environment isn't corrupted. You can **Resume** precisely where you left off, or trigger a **Rollback** to perform an atomic `git reset --hard`.
 
-All AI inference happens through InstantAIGate — no local model weights, no GPU requirements, just an API key.
+All heavy lifting is delegated to an internal `VersionEngine` and an ephemeral connection to InstantAIGate — giving you serverless, deterministic automation right in your TUI.
+
 
 ## Key Features
+
+### Zero-Toil Repository Versioning
+Version management across multi-project .NET solutions is notoriously painful and error-prone. Instancium Publisher eliminates this headache entirely. Its internal `VersionEngine` natively parses XML project manifests (`.csproj`) and aligns versions across the entire repository in milliseconds. 
+It mathematically handles complex SemVer 2.0 transitions—from pre-release increments (`-rc.1` → `-rc.2`) to stable promotions—guaranteeing zero version drift without the need for brittle MSBuild scripts or regex hacks.
 
 ### Interactive TUI Navigation
 Hierarchical Spectre.Console interface for switching between repositories and workspaces. View active branch, pending changes, and project context at a glance.
@@ -66,6 +82,7 @@ Session state persistence allows interrupted releases to resume or safely perfor
 Built-in filters automatically strip release-engineering noise and optimize payloads before LLM processing:
 - **Diff payload optimization:** Strips whitespace, limits context lines, and truncates massive hunks to prevent LLM attention dilution.
 - **Commit log sanitization:** Ignores version bump commits, backport operations, merge commits from release branches, and generated files (`.min.js`, lock files, binaries).
+
 
 ## Installation
 
