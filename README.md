@@ -11,20 +11,9 @@ Instancium Publisher eliminates the friction between writing code and shipping r
 
 ## What It Does
 
-> 
-> Instancium Publisher solves the fundamental flaws of server-side release automation by applying a **Shift-Left** architecture. It moves fragile CI/CD bash scripts directly to the developer's machine, orchestrating the workflow through a robust local State Machine.
-> 
-
-- **Shifts release orchestration left:** Keeps your local working tree and remote branches perfectly synchronized, eliminating "non-fast-forward" push errors caused by server-side AI commits.
-- **Generates commit messages** from staged diffs using AI, streaming tokens in real-time to keep the human in the loop as the final validator.
-- **Creates release changelogs** by analyzing commit history and filtering out noise (version bumps, backports, merge commits).
-- **Manages semantic versions** with full SemVer 2.0 support (major/minor/patch, pre-releases, custom bumps).
-- **Publishes releases** end-to-end: branch creation, merging, tagging, and GitHub Release creation.
-- **Recovers from failures** using transactional state persistence — operating as a local State Machine that allows you to safely resume or rollback interrupted distributed Git operations.
-
-## What It Does
-
+>
 > Instancium Publisher replaces fragile, black-box server-side release scripts with a robust **Local-First Orchestration** model. By shifting AI generation and workflow validation directly to the developer's workstation, it guarantees complete human-in-the-loop oversight before a single remote ref is altered.
+>
 
 - **Shift-Left AI Validation:** Optimizes and cleanses raw Git diffs directly on the source machine, preventing "garbage-in, garbage-out" scenarios before sending payloads to the LLM gateway.
 - **Elimotes Upstream Desyncs:** Generates and validates AI commits locally, completely eliminating the "non-fast-forward" push errors and detached-HEAD states common with autonomous server-side CI tagging.
