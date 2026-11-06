@@ -197,14 +197,6 @@ The internal `VersionEngine` parses XML-based project manifests (`.csproj`, `Dir
 
 This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
 
-## 🐛 Known Limitations
-
-- No automated test suite in the current release
-- No structured logging (`ILogger<T>`) — diagnostic output goes to TUI
-- State file path is tied to `Environment.CurrentDirectory` — running from different directories creates separate recovery points
-- Destructive rollback requires a clean working tree
-- GitHub Release creation depends on external `gh` CLI
-
 ## 📞 Support
 
 For issues, feature requests, or questions, please [open an issue](https://github.com/instancium/Publisher/issues).
