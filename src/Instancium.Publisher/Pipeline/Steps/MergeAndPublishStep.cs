@@ -44,7 +44,6 @@ public class MergeAndPublishStep
 
         await _gitService.CheckoutBranchAsync(targetBranch, false, ct);
 
-        // 1. PULL target branch
         var pullOutputBuilder = new StringBuilder();
         int pullExitCode = await _processService.ExecuteAsync(
             "git", $"pull origin {targetBranch}", _projectContext.WorkingDirectory,
@@ -58,7 +57,6 @@ public class MergeAndPublishStep
             throw new InvalidOperationException($"Failed to pull latest changes for {targetBranch}. Exit code: {pullExitCode}.\nGit Output: {pullOutputBuilder}");
         }
 
-        // 2. MERGE release branch into targetBranch (main) preserving history graph
         var mergeOutputBuilder = new StringBuilder();
         await _processService.ExecuteAsync(
             "git", $"merge --no-commit --no-ff {context.ReleaseBranch}", _projectContext.WorkingDirectory,
@@ -92,15 +90,12 @@ public class MergeAndPublishStep
         await _gitService.TagAndPushAsync(versionTag, ct);
         await _gitService.PushBranchAsync(targetBranch, force: false, ct);
 
-        // 3. BACKPORT to SourceBranch (e.g. dev/main)
         if (!string.Equals(context.SourceBranch, targetBranch, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(context.SourceBranch))
         {
             await _progressReporter.ReportAsync($"Backporting release {versionTag} to {context.SourceBranch}...", ct);
             await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
 
-            // Fast-forward SourceBranch to ReleaseBranch first so we don't create a redundant
-            // divergent merge commit ("0 files changed") ahead of targetBranch.
             int ffExitCode = await _processService.ExecuteAsync(
                 "git", $"merge --ff-only {context.ReleaseBranch}", _projectContext.WorkingDirectory,
                 null, null, ct);
@@ -108,7 +103,6 @@ public class MergeAndPublishStep
             if (ffExitCode != 0)
             {
                 var backportOutputBuilder = new StringBuilder();
-
                 await _processService.ExecuteAsync(
                     "git", $"merge --no-commit --no-ff {context.ReleaseBranch}", _projectContext.WorkingDirectory,
                     msg => backportOutputBuilder.AppendLine(msg),
@@ -185,14 +179,15 @@ public class MergeAndPublishStep
 
     private async Task HandleGitHubCliFailureAsync(string tag, string releaseNotes, string errorReason, CancellationToken ct)
     {
-        string fallbackFileName = $"RELEASE_NOTES_{tag}.md";
-        string fallbackPath = Path.Combine(_projectContext.WorkingDirectory, fallbackFileName);
+        string tempDirectory = Path.Combine(Path.GetTempPath(), "Instancium.Publisher");
+        Directory.CreateDirectory(tempDirectory);
 
+        string fallbackPath = Path.Combine(tempDirectory, $"RELEASE_NOTES_{tag}.md");
         await File.WriteAllTextAsync(fallbackPath, releaseNotes, ct);
 
         await _progressReporter.ReportWarningAsync(
             $"GitHub CLI ('gh') is unavailable or unauthenticated (Exit details: {errorReason.Trim()}).", ct);
         await _progressReporter.ReportWarningAsync(
-            $"Release notes exported locally to '{fallbackFileName}'. Tag {tag} was pushed successfully.", ct);
+            $"Release notes exported to '{fallbackPath}'. Tag {tag} was pushed successfully.", ct);
     }
 }
