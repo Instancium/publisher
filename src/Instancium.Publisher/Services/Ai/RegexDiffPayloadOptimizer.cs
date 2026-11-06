@@ -1,11 +1,11 @@
 namespace Instancium.Publisher.Services.Ai;
 
-using System;
-using System.Text;
-using System.Text.RegularExpressions;
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Interfaces;
 using Microsoft.Extensions.Options;
+using System;
+using System.Text;
+using System.Text.RegularExpressions;
 
 /// <summary>
 /// Optimizes diff payloads using regex to strip verbose Git headers and truncate massive hunks.

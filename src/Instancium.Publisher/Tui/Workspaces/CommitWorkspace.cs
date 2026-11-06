@@ -1,7 +1,6 @@
 ﻿namespace Instancium.Publisher.Tui.Workspaces;
 
 using Instancium.Publisher.Core.Interfaces;
-using Instancium.Publisher.Pipeline.Steps;
 using Instancium.Publisher.State;
 using Spectre.Console;
 using System;
@@ -33,7 +32,7 @@ public sealed class CommitWorkspace : ITuiWorkspace
         {
             await TuiProgressReporter.RunWithLiveStatusAsync(
                 "Staging files and analyzing diff...",
-                async () => await _gitService.AddAllAsync(ct),ct);
+                async () => await _gitService.AddAllAsync(ct), ct);
 
             string diff = await _gitService.GetCachedDiffAsync(ct);
             string diffStat = await _gitService.GetCachedDiffStatAsync(ct);

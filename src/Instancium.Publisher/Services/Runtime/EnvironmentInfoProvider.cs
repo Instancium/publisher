@@ -4,10 +4,7 @@ using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Interfaces;
 using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 
 
 internal class EnvironmentInfoProvider(IOptions<PublisherSettings> options) : IEnvironmentInfoProvider

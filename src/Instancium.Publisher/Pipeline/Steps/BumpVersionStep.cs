@@ -1,13 +1,13 @@
 namespace Instancium.Publisher.Pipeline.Steps;
 
+using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.State;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Instancium.Publisher.Core.Domain;
-using Instancium.Publisher.Core.Interfaces;
-using Instancium.Publisher.State;
 
 /// <summary>
 /// Applies repository-wide versioning: resolves the repository version from all project snapshots,

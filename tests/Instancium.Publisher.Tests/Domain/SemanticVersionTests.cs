@@ -1,7 +1,7 @@
 namespace Instancium.Publisher.Tests.Domain;
 
-using System;
 using Instancium.Publisher.Core.Domain;
+using System;
 using Xunit;
 
 /// <summary>

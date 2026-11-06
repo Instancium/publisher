@@ -1,11 +1,11 @@
 namespace Instancium.Publisher.Services.Versioning;
 
+using Instancium.Publisher.Core.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Instancium.Publisher.Core.Interfaces;
 
 /// <summary>
 /// File-system discovery of SDK-style projects participating in repository-wide versioning.

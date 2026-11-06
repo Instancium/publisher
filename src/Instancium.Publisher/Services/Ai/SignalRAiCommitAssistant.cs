@@ -1,10 +1,10 @@
 namespace Instancium.Publisher.Services.Ai;
 
+using Instancium.Publisher.Configuration;
+using Instancium.Publisher.Core.Interfaces;
 using InstantAIGate.Core.Dtos.Inference;
 using InstantAIGate.Core.Dtos.Session;
 using InstantAIGate.Core.Dtos.Status;
-using Instancium.Publisher.Configuration;
-using Instancium.Publisher.Core.Interfaces;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using System;
