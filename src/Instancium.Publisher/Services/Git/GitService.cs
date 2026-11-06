@@ -163,15 +163,12 @@ public sealed class GitService : IGitService
     /// <summary>
     /// Resolves the highest Semantic Version tag in the repository, falling back to version refname sorting.
     /// </summary>
-    public async Task<string> GetLatestTagAsync(CancellationToken ct = default)
+    public async Task<string> GetLatestTagAsync(bool stableOnly = false, CancellationToken ct = default)
     {
         string output = await _processRunner.GetOutputAsync("git", "tag --sort=-v:refname", _projectContext.WorkingDirectory, ct);
         string[] tags = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        if (tags.Length == 0)
-        {
-            return string.Empty;
-        }
+        if (tags.Length == 0) return string.Empty;
 
         string? highestTag = null;
         SemanticVersion? highestVersion = null;
@@ -180,6 +177,12 @@ public sealed class GitService : IGitService
         {
             if (TryParseSemanticVersion(tag, out SemanticVersion? parsed) && parsed is not null)
             {
+                // Ignore pre-releases if we only need a stable anchor
+                if (stableOnly && parsed.IsPreRelease)
+                {
+                    continue;
+                }
+
                 if (highestVersion is null || parsed.CompareTo(highestVersion) > 0)
                 {
                     highestVersion = parsed;
@@ -191,11 +194,21 @@ public sealed class GitService : IGitService
         return highestTag ?? tags[0];
     }
 
-    public Task<string> GetCommitLogAsync(string? fromTag, CancellationToken ct = default)
+    public Task<string> GetCommitLogAsync(string? fromTag, bool ignorePreReleaseTags = false, CancellationToken ct = default)
     {
-        string range = string.IsNullOrWhiteSpace(fromTag) ? "-n 20" : $"-n 50 {fromTag.Trim()}..HEAD";
-        return _processRunner.GetOutputAsync("git", $"log {range} --oneline --no-merges --name-status -M", _projectContext.WorkingDirectory, ct);
+        // Git magic: --exclude="*-*" makes --tags ignore any tags containing a hyphen.
+        // According to SemVer, pre-releases always contain a hyphen (v1.6.0-rc.1), while stable releases do not (v1.6.0).
+        string notTagsArgs = ignorePreReleaseTags
+            ? "--not --exclude=\"*-*\" --tags"
+            : "--not --tags";
+
+        string range = string.IsNullOrWhiteSpace(fromTag)
+            ? "-n 20"
+            : $"-n 50 {fromTag.Trim()}..HEAD {notTagsArgs}";
+
+        return _processRunner.GetOutputAsync("git", $"log --oneline --no-merges --name-status -M {range}", _projectContext.WorkingDirectory, ct);
     }
+
 
     /// <summary>
     /// Creates or updates an annotated release tag and pushes it to the remote repository with retry support.

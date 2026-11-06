@@ -17,8 +17,8 @@ public interface IGitService
     Task FetchAllAsync(CancellationToken ct = default);
     Task DeleteLocalBranchAsync(string branchName, CancellationToken ct = default);
     Task DeleteRemoteBranchAsync(string branchName, CancellationToken ct = default);
-    Task<string> GetLatestTagAsync(CancellationToken ct = default);
-    Task<string> GetCommitLogAsync(string? fromTag, CancellationToken ct = default);
+    Task<string> GetLatestTagAsync(bool stableOnly = false, CancellationToken ct = default);
+    Task<string> GetCommitLogAsync(string? fromTag, bool ignorePreReleaseTags = false, CancellationToken ct = default);
     Task TagAndPushAsync(string tagName, CancellationToken ct = default);
     Task RestoreAllAsync(CancellationToken ct = default);
     Task<bool> HasUncommittedChangesAsync(CancellationToken ct = default);

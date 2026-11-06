@@ -153,15 +153,25 @@ public sealed class ReleaseWorkspace(
 
             if (activeContext.CurrentStep <= 2)
             {
+                if (activeContext.NewVersion is null)
+                {
+                    throw new InvalidOperationException("Fatal state error: NewVersion is null at step 2.");
+                }
+
                 string lastTag = string.Empty;
-                try { lastTag = await _gitService.GetLatestTagAsync(ct); } catch { }
+                bool isStableRelease = !activeContext.NewVersion.IsPreRelease;
+
+                try { 
+                    lastTag = await _gitService.GetLatestTagAsync(stableOnly: isStableRelease, ct); 
+                } 
+                catch { }
 
                 string rangeDescription = string.IsNullOrWhiteSpace(lastTag)
-                    ? "last 20 commits (no tags found in repository)"
-                    : $"{lastTag}..HEAD";
+                                ? "last 20 commits (no tags found in repository)"
+                                : $"{lastTag}..HEAD";
 
                 AnsiConsole.MarkupLine($"\n[dim]Changelog commit range: {Markup.Escape(rangeDescription)}[/]");
-                string gitLog = await _gitService.GetCommitLogAsync(lastTag, ct);
+                string gitLog = await _gitService.GetCommitLogAsync(lastTag, ignorePreReleaseTags: isStableRelease, ct);
 
                 var fullNotesBuilder = new StringBuilder();
                 await using var enumerator = _aiAssistant.StreamReleaseNotesAsync(gitLog, ct).GetAsyncEnumerator(ct);
