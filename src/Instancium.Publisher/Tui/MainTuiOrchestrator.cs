@@ -128,6 +128,9 @@ public sealed class MainTuiOrchestrator
         grid.AddRow("[dim]Active AI Engine:[/]", $"[cyan]{Markup.Escape(modelId)}[/]");
         grid.AddRow("[dim]Loaded Projects:[/]", $"[white]{_settings.RegisteredProjects.Count}[/]");
         grid.AddRow("[dim]Gateway URL:[/]", $"[dim]{Markup.Escape(_settings.AiGatewayUrl ?? "N/A")}[/]");
+        grid.AddRow("[dim][/]");
+        grid.AddRow("[dim]Select Target Repository Context[/]", $"[dim]👇[/]");
+
 
         AnsiConsole.Write(
             new Panel(grid)
@@ -142,24 +145,34 @@ public sealed class MainTuiOrchestrator
         AnsiConsole.Clear();
         RenderAppHero();
 
-        // Build the list with custom formatting (project name + its path)
+        int maxNameLength = _settings.RegisteredProjects.Keys.Any()
+            ? _settings.RegisteredProjects.Keys.Max(k => k.Length)
+            : 20;
+
+ 
+        int padding = maxNameLength + 4;
+
         var choices = _settings.RegisteredProjects
-            .Select(kvp => new MenuChoice(
-                kvp.Key,
-                $"[bold white]{Markup.Escape(kvp.Key)}[/] [dim]({Markup.Escape(kvp.Value)})[/]"))
+            .Select(kvp =>
+            {
+                
+                string paddedName = kvp.Key.PadRight(padding);
+
+                return new MenuChoice(
+                    kvp.Key,
+                    $"[bold white]{Markup.Escape(paddedName)}[/][dim]{Markup.Escape(kvp.Value)}[/]");
+            })
             .ToList();
 
-        // Visually separate the exit item
         choices.Add(new MenuChoice(null, "[grey]Exit Application[/]"));
 
         var selected = AnsiConsole.Prompt(
             new SelectionPrompt<MenuChoice>()
-                .Title("\n[cyan]Select Target Repository Context:[/]")
                 .PageSize(10)
                 .HighlightStyle(new Style(Color.Cyan, decoration: Decoration.Bold))
                 .MoreChoicesText("[grey](Move up and down to reveal more projects)[/]")
                 .AddChoices(choices)
-                .UseConverter(c => c.Display)); // Supports markup in the menu
+                .UseConverter(c => c.Display)); 
 
         return selected.Key;
     }
