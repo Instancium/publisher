@@ -93,7 +93,7 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             if (choice == "Start Fresh")
             {
                 await ExecuteDestructiveRollbackAsync(activeContext, ct);
-                activeContext = null;
+                return;
             }
         }
 
@@ -113,7 +113,6 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
 
             if (activeContext.CurrentStep <= 1)
             {
-                // Guarantee a clean slate before executing release steps
                 await _gitService.EnsureCleanWorkingDirectoryAsync(ct);
 
                 string repositoryRoot = await _gitService.GetRepositoryRootAsync(ct);
@@ -278,7 +277,10 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
             AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
             AnsiConsole.MarkupLine("[yellow]Fix the file above: resolve merge conflicts, repair encoding, or restore it via 'git checkout -- <file>'. Then choose Resume.[/]");
 
-            await _stateManager.SaveAsync(activeContext);
+            if (activeContext != null && !string.IsNullOrEmpty(activeContext.ReleaseBranch))
+            {
+                await _stateManager.SaveAsync(activeContext);
+            }
 
             AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
             Console.ReadKey(intercept: true);
@@ -286,9 +288,16 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"\n[bold red]Release Pipeline Faulted:[/] {Markup.Escape(ex.Message)}");
-            AnsiConsole.MarkupLine("[yellow]Pipeline state has been saved. If a merge failed, it was automatically aborted to protect your project files. You can safely choose 'Resume' after investigating the issue.[/]");
 
-            await _stateManager.SaveAsync(activeContext);
+            if (activeContext != null && !string.IsNullOrEmpty(activeContext.ReleaseBranch))
+            {
+                AnsiConsole.MarkupLine("[yellow]Pipeline state has been saved. If a merge failed, it was automatically aborted to protect your project files. You can safely choose 'Resume' after investigating the issue.[/]");
+                await _stateManager.SaveAsync(activeContext);
+            }
+            else
+            {
+                await _stateManager.RollbackAsync();
+            }
 
             AnsiConsole.MarkupLine("\n[dim]Press ANY KEY to return to main menu...[/]");
             Console.ReadKey(intercept: true);
@@ -459,12 +468,18 @@ public sealed class ReleaseWorkspace : ITuiWorkspace
         AnsiConsole.MarkupLine("[red]Executing safe rollback...[/]");
         try
         {
-            if (!string.IsNullOrEmpty(context.SourceBranch))
-            {
-                await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
-            }
+            string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
 
-            await _gitService.RestoreAllAsync(ct);
+            if (!string.IsNullOrEmpty(context.ReleaseBranch) &&
+                string.Equals(currentBranch, context.ReleaseBranch, StringComparison.OrdinalIgnoreCase))
+            {
+                await _gitService.RestoreAllAsync(ct);
+
+                if (!string.IsNullOrEmpty(context.SourceBranch))
+                {
+                    await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
+                }
+            }
 
             if (!string.IsNullOrEmpty(context.ReleaseBranch))
             {
