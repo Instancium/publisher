@@ -204,7 +204,7 @@ public sealed class ReleaseWorkspace(
                                 fullNotesBuilder.Append(enumerator.Current);
                             }
 
-                            ctx.UpdateTarget(ParseMarkdownToSpectre(fullNotesBuilder.ToString()));
+                            ctx.UpdateTarget(MarkdownReleaseNotesRenderer.Render(fullNotesBuilder.ToString()));
                         });
                 }
 
@@ -441,7 +441,6 @@ public sealed class ReleaseWorkspace(
         {
             string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
 
-            // Безопасность: Делаем жесткий сброс файлов ТОЛЬКО если находимся в изолированной ветке релиза
             if (!string.IsNullOrEmpty(context.ReleaseBranch) &&
                 string.Equals(currentBranch, context.ReleaseBranch, StringComparison.OrdinalIgnoreCase))
             {
@@ -468,73 +467,5 @@ public sealed class ReleaseWorkspace(
             AnsiConsole.MarkupLine("[yellow]Pipeline state retained. Manual Git fix may be required before retrying Rollback.[/]");
             throw;
         }
-    }
-
-    private static Spectre.Console.Rendering.IRenderable ParseMarkdownToSpectre(string markdown)
-    {
-        var lines = markdown.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        var summaryBuilder = new StringBuilder();
-        Table? table = null;
-
-        foreach (var line in lines)
-        {
-            string trimLine = line.Trim();
-            if (trimLine.StartsWith(">"))
-            {
-                string content = trimLine[1..].Trim();
-                content = content.Replace("**Executive Summary**", "[bold cyan]Executive Summary[/]");
-                summaryBuilder.AppendLine(content);
-            }
-            else if (trimLine.StartsWith("|"))
-            {
-                var cells = trimLine.Split('|', StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim()).ToArray();
-                if (cells.Length == 0) continue;
-                if (cells[0].Contains("---") || (cells.Length > 1 && cells[1].Contains("---"))) continue;
-
-                if (table == null)
-                {
-                    table = new Table().Expand().Border(TableBorder.Rounded).BorderColor(Color.Grey);
-                    foreach (var header in cells)
-                    {
-                        table.AddColumn($"[bold silver]{Markup.Escape(header)}[/]");
-                    }
-                }
-                else
-                {
-                    if (cells.Length == table.Columns.Count)
-                    {
-                        var finalCells = cells.Select(c =>
-                        {
-                            string escaped = Markup.Escape(c);
-                            return System.Text.RegularExpressions.Regex.Replace(escaped, @"\`(.*?)\`", "[cyan]$1[/]");
-                        }).ToArray();
-                        table.AddRow(finalCells);
-                    }
-                }
-            }
-        }
-
-        var elements = new List<Spectre.Console.Rendering.IRenderable>();
-        if (summaryBuilder.Length > 0)
-        {
-            elements.Add(new Panel($"[silver]{summaryBuilder.ToString().Trim()}[/]")
-                .Header("[bold green]Release Impact[/]")
-                .BorderColor(Color.Green)
-                .RoundedBorder()
-                .Expand());
-            elements.Add(new Text(""));
-        }
-
-        if (table != null)
-        {
-            elements.Add(table);
-        }
-
-        if (elements.Count == 0)
-        {
-            return new Markup($"[silver]{Markup.Escape(markdown)}[/]");
-        }
-
-        return new Rows(elements);
     }
 }
