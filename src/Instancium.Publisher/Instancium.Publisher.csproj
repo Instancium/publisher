@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.6.5</Version>
+    <Version>1.6.6</Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- Keep existing SignalR for now (to be removed in Stage 3) -->
@@ -23,10 +23,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-
-	<ItemGroup>
-		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-			<_Parameter1>Instancium.Publisher.Tests</_Parameter1>
-		</AssemblyAttribute>
-	</ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Instancium.Publisher.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>
