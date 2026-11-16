@@ -49,6 +49,7 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "obj/Debug/", "obj/Release/",
         "bin/Debug/", "bin/Release/", ".min."
     };
+    private readonly int _maxChunkLength;
 
     public SignalRAiCommitAssistant(
         IOptions<PublisherSettings> settings,
@@ -65,6 +66,8 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         _modelId = config.AiModelId ?? "qwen3-vl-8b-instruct";
         _progressReporter = progressReporter;
         _diffOptimizer = diffOptimizer;
+
+        _maxChunkLength = config.MaxChunkLength > 0 ? config.MaxChunkLength : 3000;
     }
 
     private void AbortAllActiveStreams(Exception exception)
@@ -136,7 +139,22 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
         {
             try
             {
-                string sessionId = overflowData.GetProperty("SessionId").GetString() ?? string.Empty;
+                string sessionId = string.Empty;
+
+                // Защита от разного формата возвращаемых данных Gateway-ем
+                if (overflowData.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    sessionId = overflowData.GetString() ?? string.Empty;
+                }
+                else if (overflowData.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    if (overflowData.TryGetProperty("SessionId", out var idProp) ||
+                        overflowData.TryGetProperty("sessionId", out idProp))
+                    {
+                        sessionId = idProp.GetString() ?? string.Empty;
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(sessionId))
                 {
                     var overflowEx = new InvalidOperationException($"Context Window Boundary Reached for session {sessionId}.");
@@ -359,19 +377,26 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     }
 
     public async IAsyncEnumerable<string> StreamCommitMessageAsync(
-        string diff,
-        string diffStat,
-        [EnumeratorCancellation] CancellationToken ct = default)
+            string diff,
+            string diffStat,
+            [EnumeratorCancellation] CancellationToken ct = default)
     {
         var totalFileStatuses = ExtractFileStatuses(diff);
         string optimizedDiff = _diffOptimizer.Optimize(diff);
 
         var modelDetails = await GetActiveModelDetailsAsync(ct);
         int contextSize = modelDetails.ContextSize > 0 ? modelDetails.ContextSize : 4096;
+
         const int systemPromptTokens = 400;
         const int reserveTokens = 512;
         int usableTokens = Math.Max(512, contextSize - systemPromptTokens - reserveTokens);
-        int safeChunkChars = (int)(usableTokens * 2.0);
+
+        int llmSafeLimit = (int)(usableTokens * 2.0);
+
+        const int signalRTransportLimit = 15000;
+
+        int safeChunkChars = Math.Min(Math.Min(llmSafeLimit, _maxChunkLength), signalRTransportLimit);
+
         if (optimizedDiff.Length <= safeChunkChars)
         {
             string sessionId = $"diff-direct-{Guid.NewGuid():N}";
@@ -486,12 +511,19 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
     }
 
     public async IAsyncEnumerable<string> StreamReleaseNotesAsync(
-        string gitLog,
-        [EnumeratorCancellation] CancellationToken ct = default)
+            string gitLog,
+            [EnumeratorCancellation] CancellationToken ct = default)
     {
         string filteredLog = FilterReleaseNoise(gitLog);
-        const int signalRSafeLimit = 15000;
-        if (filteredLog.Length <= signalRSafeLimit)
+
+        // ASP.NET Core SignalR enforces a default MaximumReceiveMessageSize of 32KB.
+        // 15,000 UTF-16 characters is roughly 30KB. If a payload exceeds this, 
+        // the Gateway will forcibly close the transport connection without returning an error.
+        // We take the strictest constraint: either the user-configured LLM token limit or the transport limit.
+        const int signalRTransportLimit = 15000;
+        int safeLimit = Math.Min(_maxChunkLength, signalRTransportLimit);
+
+        if (filteredLog.Length <= safeLimit)
         {
             string prompt = BuildChangelogPrompt(filteredLog);
             string directSessionId = $"changelog-direct-{Guid.NewGuid():N}";
@@ -509,9 +541,11 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
             }
             yield break;
         }
+
         await _progressReporter.ReportAsync(
-            $"Commit log exceeds SignalR packet limits ({filteredLog.Length} chars). Engaging Checkpointed Map-Reduce...",
+            $"Commit log exceeds chunk limits ({filteredLog.Length} chars). Engaging Checkpointed Map-Reduce...",
             ct);
+
         string pipelineSessionId = $"changelog-pipeline-{Guid.NewGuid():N}";
         try
         {
@@ -523,8 +557,10 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
             var initMessage = new ChatMessage("system", systemPrompt);
             await ConsumeStreamAsync(pipelineSessionId, initMessage, ct);
             int sysCheckpoint = await GetSessionTokenCountAsync(pipelineSessionId, ct);
-            var chunks = ChunkStringByLines(filteredLog, signalRSafeLimit);
+
+            var chunks = ChunkStringByLines(filteredLog, safeLimit);
             var partialSummaries = new List<string>();
+
             for (int i = 0; i < chunks.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
@@ -540,10 +576,18 @@ public sealed class SignalRAiCommitAssistant : IAiCommitAssistant, IAsyncDisposa
                 }
                 await RollbackSessionAsync(pipelineSessionId, sysCheckpoint, ct);
             }
+
             await _progressReporter.ReportAsync(
                 "Hierarchically aggregating log summaries into final Changelog...",
                 ct);
-            string aggregatedSummary = await ReduceSummariesTreeAsync(pipelineSessionId, sysCheckpoint, partialSummaries, signalRSafeLimit, ct);
+
+            string aggregatedSummary = await ReduceSummariesTreeAsync(
+                pipelineSessionId,
+                sysCheckpoint,
+                partialSummaries,
+                safeLimit,
+                ct);
+
             string finalPrompt = BuildChangelogPrompt(aggregatedSummary);
             var finalMsg = new ChatMessage("user", finalPrompt);
             await foreach (var token in StreamChatAsync(pipelineSessionId, _modelId, finalMsg, ct))
@@ -775,7 +819,7 @@ YOUR TURN (Generate ONLY the commit message):
         return result.DistinctBy(f => f.Path).ToList();
     }
 
-    private static List<string> ChunkDiffByFiles(string rawDiff, int maxLength)
+    internal static List<string> ChunkDiffByFiles(string rawDiff, int maxLength)
     {
         var chunks = new List<string>();
         var currentChunk = new StringBuilder();
