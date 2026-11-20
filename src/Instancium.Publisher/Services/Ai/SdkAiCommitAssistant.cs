@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Services.Ai;
 
-using Instancium.Publisher.Configuration;
+using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Application.Abstractions;
 using InstantAIGate.Client.Chat;
 using InstantAIGate.Client.Configuration;

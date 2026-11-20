@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Services.Runtime;
 
-using Instancium.Publisher.Configuration;
+using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Domain.Runtime;
 using Instancium.Publisher.Application.Abstractions;
 using InstantAIGate.Client.Telemetry;

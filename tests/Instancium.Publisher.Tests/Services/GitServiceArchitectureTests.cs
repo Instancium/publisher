@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Tests.Services;
 
-using Instancium.Publisher.Configuration;
+using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Services.Git;
 using Instancium.Publisher.Application.State;

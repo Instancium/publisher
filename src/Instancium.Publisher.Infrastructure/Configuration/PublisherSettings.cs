@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Configuration;
+﻿namespace Instancium.Publisher.Infrastructure.Configuration;
 
 using System;
 using System.Collections.Generic;
