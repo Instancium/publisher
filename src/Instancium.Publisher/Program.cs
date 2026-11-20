@@ -7,7 +7,7 @@ using Instancium.Publisher.Infrastructure.Git;
 using Instancium.Publisher.Infrastructure.Runtime;
 using Instancium.Publisher.Infrastructure.Versioning;
 using Instancium.Publisher.Application.State;
-using Instancium.Publisher.State;
+using Instancium.Publisher.Infrastructure.State;
 using Instancium.Publisher.Tui;
 using Instancium.Publisher.Tui.Workspaces;
 using InstantAIGate.Client.DependencyInjection;

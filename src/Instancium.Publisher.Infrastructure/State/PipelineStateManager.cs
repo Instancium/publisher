@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.State;
+﻿namespace Instancium.Publisher.Infrastructure.State;
 
 using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.Application.State;
