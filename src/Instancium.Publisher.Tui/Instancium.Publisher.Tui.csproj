@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Instancium.Publisher</AssemblyName>
+    <RootNamespace>Instancium.Publisher.Tui</RootNamespace>
+    <Version>1.7.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Spectre.Console" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Instancium.Publisher.Application\Instancium.Publisher.Application.csproj" />
+    <ProjectReference Include="..\Instancium.Publisher.Domain\Instancium.Publisher.Domain.csproj" />
+    <ProjectReference Include="..\Instancium.Publisher.Infrastructure\Instancium.Publisher.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
