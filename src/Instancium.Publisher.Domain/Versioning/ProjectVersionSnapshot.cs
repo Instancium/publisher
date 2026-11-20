@@ -1,6 +1,4 @@
-namespace Instancium.Publisher.Core.Domain;
-
-using Instancium.Publisher.Domain.Versioning;
+﻿namespace Instancium.Publisher.Domain.Versioning;
 
 /// <summary>
 /// Immutable snapshot of the version declared inside a single SDK-style project file.
