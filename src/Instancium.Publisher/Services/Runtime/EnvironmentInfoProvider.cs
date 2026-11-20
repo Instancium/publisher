@@ -3,12 +3,33 @@
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Interfaces;
+using InstantAIGate.Client.Telemetry;
+using InstantAIGate.Core.Dtos.Status;
 using Microsoft.Extensions.Options;
+using System;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
-
-internal class EnvironmentInfoProvider(IOptions<PublisherSettings> options) : IEnvironmentInfoProvider
+/// <summary>
+/// Provides runtime diagnostics: the compiled assembly version and the real active model
+/// identifier queried from the gateway, with a configured-value fallback for display purposes.
+/// </summary>
+internal sealed class EnvironmentInfoProvider : IEnvironmentInfoProvider
 {
+    private readonly PublisherSettings _settings;
+    private readonly IGatewayTelemetryClient _telemetryClient;
+
+    public EnvironmentInfoProvider(
+        IOptions<PublisherSettings> options,
+        IGatewayTelemetryClient telemetryClient)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(telemetryClient);
+        _settings = options.Value;
+        _telemetryClient = telemetryClient;
+    }
+
     public string GetApplicationVersion()
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -27,17 +48,26 @@ internal class EnvironmentInfoProvider(IOptions<PublisherSettings> options) : IE
 
     public async Task<string> GetActiveModelIdAsync(CancellationToken ct = default)
     {
-        // Placeholder for actual implementation to retrieve the active AI model ID.
-        var modelIdFromSettings = options.Value.AiModelId;
-        await Task.Delay(10, ct); // Simulate async work
-        return modelIdFromSettings; // Example model ID
+        try
+        {
+            NativeModelDetails details = await _telemetryClient.GetActiveModelDetailsAsync(ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(details.RepoId))
+            {
+                return details.RepoId;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Display-only metadata (TUI hero, release footer): an offline or busy gateway
+            // must not break commit/release flows. Fall back to the configured model id.
+        }
+        return _settings.AiModelId;
     }
 
     public async Task<RuntimeEnvironmentInfo> GetEnvironmentInfoAsync(CancellationToken ct = default)
     {
-        var version = GetApplicationVersion();
-        var modelId = await GetActiveModelIdAsync(ct);
+        string version = GetApplicationVersion();
+        string modelId = await GetActiveModelIdAsync(ct).ConfigureAwait(false);
         return new RuntimeEnvironmentInfo(version, modelId);
     }
 }
-
