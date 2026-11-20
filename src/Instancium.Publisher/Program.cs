@@ -1,16 +1,10 @@
-﻿using Instancium.Publisher.Infrastructure.Configuration;
-using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
+﻿using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Application.Pipeline.Steps;
-using Instancium.Publisher.Infrastructure.Ai;
-using Instancium.Publisher.Infrastructure.Git;
-using Instancium.Publisher.Infrastructure.Runtime;
-using Instancium.Publisher.Infrastructure.Versioning;
 using Instancium.Publisher.Application.State;
-using Instancium.Publisher.Infrastructure.State;
+using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Infrastructure.DependencyInjection;
 using Instancium.Publisher.Tui;
 using Instancium.Publisher.Tui.Workspaces;
-using InstantAIGate.Client.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,42 +32,10 @@ internal static class Program
             })
             .ConfigureServices((context, services) =>
             {
-                services.Configure<PublisherSettings>(
-                    context.Configuration.GetSection("PublisherSettings"));
+                services.AddPublisherInfrastructure(context.Configuration);
 
-                PublisherSettings publisherSettings = context.Configuration
-                    .GetSection("PublisherSettings")
-                    .Get<PublisherSettings>() ?? new PublisherSettings();
-
-                services.AddInstantAIGateClient(options =>
-                {
-                    options.BaseUrl = publisherSettings.AiGatewayUrl;
-                    options.ApiKey = publisherSettings.AiApiKey;
-                    options.LlmRepoId = publisherSettings.AiModelId;
-                    options.ClientId = "publisher";
-
-                    // Total reconnect budget is 17 seconds, kept below the server-side
-                    // disconnect grace period (30 seconds) so sessions and their pinned
-                    // KV-cache prefixes survive typical network blinks without eviction.
-                    options.ReconnectDelays =
-                    [
-                        TimeSpan.Zero,
-                        TimeSpan.FromSeconds(2),
-                        TimeSpan.FromSeconds(5),
-                        TimeSpan.FromSeconds(10)
-                    ];
-                });
-
-                services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
                 services.AddSingleton<ProjectContext>();
                 services.AddSingleton<IProgressReporter, TuiProgressReporter>();
-                services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
-                services.AddSingleton<IGitService, GitService>();
-                services.AddSingleton<IVersionEngine, VersionEngine>();
-                services.AddSingleton<IPipelineStateManager, PipelineStateManager>();
-                services.AddSingleton<IDiffPayloadOptimizer, RegexDiffPayloadOptimizer>();
-                services.AddSingleton<IAiCommitAssistant, SdkAiCommitAssistant>();
-                services.AddSingleton<IProjectDiscoveryService, ProjectDiscoveryService>();
                 services.AddTransient<BumpVersionStep>();
                 services.AddTransient<GenerateCommitMessageStep>();
                 services.AddTransient<MergeAndPublishStep>();
