@@ -1,10 +1,6 @@
-﻿using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Application.Pipeline.Steps;
-using Instancium.Publisher.Application.State;
-using Instancium.Publisher.Tui.Abstractions;
+﻿using Instancium.Publisher.Application.DependencyInjection;
 using Instancium.Publisher.Infrastructure.DependencyInjection;
-using Instancium.Publisher.Tui;
-using Instancium.Publisher.Tui.Workspaces;
+using Instancium.Publisher.Tui.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -32,16 +28,9 @@ internal static class Program
             })
             .ConfigureServices((context, services) =>
             {
+                services.AddPublisherApplication();
                 services.AddPublisherInfrastructure(context.Configuration);
-
-                services.AddSingleton<ProjectContext>();
-                services.AddSingleton<IProgressReporter, TuiProgressReporter>();
-                services.AddTransient<BumpVersionStep>();
-                services.AddTransient<GenerateCommitMessageStep>();
-                services.AddTransient<MergeAndPublishStep>();
-                services.AddTransient<ITuiWorkspace, CommitWorkspace>();
-                services.AddTransient<ITuiWorkspace, ReleaseWorkspace>();
-                services.AddSingleton<MainTuiOrchestrator>();
+                services.AddPublisherTui(context.Configuration);
             })
             .Build();
 
