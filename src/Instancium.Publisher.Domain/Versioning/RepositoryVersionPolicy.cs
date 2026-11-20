@@ -1,6 +1,5 @@
-namespace Instancium.Publisher.Core.Domain;
+﻿namespace Instancium.Publisher.Domain.Versioning;
 
-using Instancium.Publisher.Domain.Versioning;
 using System;
 using System.Collections.Generic;
 

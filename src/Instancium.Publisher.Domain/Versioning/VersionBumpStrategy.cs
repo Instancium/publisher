@@ -1,4 +1,4 @@
-namespace Instancium.Publisher.Core.Domain
+﻿namespace Instancium.Publisher.Domain.Versioning
 {
     public enum VersionBumpStrategy
     {
