@@ -9,9 +9,9 @@ using System.Text;
 /// artifacts, enforces the 72-character header limit, and guarantees the mandatory blank line
 /// between header and bullet body.
 /// </summary>
-internal static class CommitMessageSanitizer
+public static class CommitMessageSanitizer
 {
-    internal static string Sanitize(string rawMessage)
+    public static string Sanitize(string rawMessage)
     {
         if (string.IsNullOrWhiteSpace(rawMessage))
         {

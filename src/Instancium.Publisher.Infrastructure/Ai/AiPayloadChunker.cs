@@ -42,30 +42,23 @@ internal static class AiPayloadChunker
         {
             if (line.StartsWith("diff --git") || line.StartsWith("## File: "))
             {
-                if (line.StartsWith("## File: "))
+                if (TryExtractFileHeader(line, out string extractedFileName))
                 {
-                    currentFileName = line["## File: ".Length..].Trim();
-                }
-                else
-                {
-                    var parts = line.Split(' ');
-                    string targetPath = parts.Length >= 4 ? parts[3] : (parts.Length >= 3 ? parts[2] : string.Empty);
-                    targetPath = targetPath.Trim('"');
-                    currentFileName = targetPath.StartsWith("b/") || targetPath.StartsWith("a/")
-                        ? targetPath[2..]
-                        : targetPath;
-                }
-                isCurrentFileIgnored = IsGeneratedOrBinary(currentFileName);
-                if (currentChunk.Length > 0 && currentChunk.Length + line.Length > maxLength)
-                {
-                    chunks.Add(currentChunk.ToString());
-                    currentChunk.Clear();
-                }
-                if (isCurrentFileIgnored)
-                {
-                    currentChunk.AppendLine(line);
-                    currentChunk.AppendLine($"[SKIPPED: Auto-generated/binary payload for {currentFileName}]");
-                    continue;
+                    currentFileName = extractedFileName;
+                    isCurrentFileIgnored = IsGeneratedOrBinary(currentFileName);
+
+                    if (currentChunk.Length > 0 && currentChunk.Length + line.Length > maxLength)
+                    {
+                        chunks.Add(currentChunk.ToString());
+                        currentChunk.Clear();
+                    }
+
+                    if (isCurrentFileIgnored)
+                    {
+                        currentChunk.AppendLine(line);
+                        currentChunk.AppendLine($"[SKIPPED: Auto-generated/binary payload for {currentFileName}]");
+                        continue;
+                    }
                 }
             }
             if (!isCurrentFileIgnored)
@@ -87,6 +80,42 @@ internal static class AiPayloadChunker
             chunks.Add(currentChunk.ToString());
         }
         return chunks;
+    }
+
+
+    private static bool TryExtractFileHeader(string line, out string fileName)
+    {
+        if (line.StartsWith("## File [", StringComparison.Ordinal))
+        {
+            int separatorIndex = line.IndexOf("]: ", StringComparison.Ordinal);
+            if (separatorIndex > 0)
+            {
+                string rawPath = line[(separatorIndex + 3)..].Trim();
+                int arrowIndex = rawPath.IndexOf(" -> ", StringComparison.Ordinal);
+                fileName = arrowIndex >= 0 ? rawPath[(arrowIndex + 4)..].Trim() : rawPath;
+                return true;
+            }
+        }
+
+        if (line.StartsWith("## File: ", StringComparison.Ordinal))
+        {
+            fileName = line["## File: ".Length..].Trim();
+            return true;
+        }
+
+        if (line.StartsWith("diff --git", StringComparison.Ordinal))
+        {
+            var parts = line.Split(' ');
+            string targetPath = parts.Length >= 4 ? parts[3] : (parts.Length >= 3 ? parts[2] : string.Empty);
+            targetPath = targetPath.Trim('"');
+            fileName = targetPath.StartsWith("b/") || targetPath.StartsWith("a/")
+                ? targetPath[2..]
+                : targetPath;
+            return true;
+        }
+
+        fileName = string.Empty;
+        return false;
     }
 
     internal static List<string> ChunkStringByLines(string text, int maxChars)

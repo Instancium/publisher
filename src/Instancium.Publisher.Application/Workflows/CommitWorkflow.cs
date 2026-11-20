@@ -1,4 +1,5 @@
 using Instancium.Publisher.Application.Abstractions;
+using Instancium.Publisher.Infrastructure.Ai;
 
 namespace Instancium.Publisher.Application.Workflows;
 
@@ -26,20 +27,31 @@ public sealed class CommitWorkflow
 
     public async Task<CommitInspectionResult> StageAndInspectAsync(CancellationToken ct = default)
     {
-        await _gitService.AddAllAsync(ct);
-
         string diff = await _gitService.GetCachedDiffAsync(ct);
-        string diffStat = await _gitService.GetCachedDiffStatAsync(ct);
+
+        // Respect pre-staged changes (partial staging); stage all only when the index is empty.
+        if (string.IsNullOrWhiteSpace(diff))
+        {
+            await _gitService.AddAllAsync(ct);
+            diff = await _gitService.GetCachedDiffAsync(ct);
+        }
 
         if (!string.IsNullOrWhiteSpace(diff))
         {
+            string diffStat = await _gitService.GetCachedDiffStatAsync(ct);
             return new CommitInspectionResult(true, false, string.Empty, diff, diffStat);
         }
 
         bool hasUnpushed = await _gitService.HasUnpushedCommitsAsync(ct);
         string branch = hasUnpushed ? await _gitService.GetCurrentBranchAsync(ct) : string.Empty;
-
         return new CommitInspectionResult(false, hasUnpushed, branch, string.Empty, string.Empty);
+    }
+
+    public async Task<string> CommitAndGetBranchAsync(string commitMessage, CancellationToken ct = default)
+    {
+        string sanitized = CommitMessageSanitizer.Sanitize(commitMessage);
+        await _gitService.CommitAsync(sanitized, ct);
+        return await _gitService.GetCurrentBranchAsync(ct);
     }
 
     public IAsyncEnumerable<string> StreamCommitMessageAsync(
@@ -50,11 +62,6 @@ public sealed class CommitWorkflow
         return _aiAssistant.StreamCommitMessageAsync(diff, diffStat, ct);
     }
 
-    public async Task<string> CommitAndGetBranchAsync(string commitMessage, CancellationToken ct = default)
-    {
-        await _gitService.CommitAsync(commitMessage, ct);
-        return await _gitService.GetCurrentBranchAsync(ct);
-    }
 
     public Task PushBranchAsync(string branchName, CancellationToken ct = default)
     {

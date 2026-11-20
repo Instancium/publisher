@@ -139,19 +139,11 @@ public sealed class ReleaseWorkflow
             throw new InvalidOperationException("Fatal state error: NewVersion is null at step 2.");
         }
 
-        string lastTag = string.Empty;
         bool isStableRelease = !state.NewVersion.IsPreRelease;
-
-        try
-        {
-            lastTag = await _gitService.GetLatestTagAsync(stableOnly: isStableRelease, ct);
-        }
-        catch
-        {
-        }
+        string lastTag = await _gitService.GetLatestTagAsync(stableOnly: isStableRelease, ct);
 
         string rangeDescription = string.IsNullOrWhiteSpace(lastTag)
-            ? "last 20 commits (no tags found in repository)"
+            ? "last 20 commits (no reachable tags found)"
             : $"{lastTag}..HEAD";
 
         string gitLog = await _gitService.GetCommitLogAsync(lastTag, ignorePreReleaseTags: isStableRelease, ct);
