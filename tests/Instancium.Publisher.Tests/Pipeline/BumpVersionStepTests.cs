@@ -1,6 +1,5 @@
-namespace Instancium.Publisher.Tests.Pipeline;
+﻿namespace Instancium.Publisher.Tests.Pipeline;
 
-using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Pipeline.Steps;
 using Instancium.Publisher.Services.Versioning;

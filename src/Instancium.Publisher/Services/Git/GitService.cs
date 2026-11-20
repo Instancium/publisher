@@ -1,7 +1,6 @@
 ﻿namespace Instancium.Publisher.Services.Git;
 
 using Instancium.Publisher.Configuration;
-using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.State;

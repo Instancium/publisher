@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Core.Interfaces;
 
-using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Domain.Runtime;
 using System.Threading;
 using System.Threading.Tasks;
 

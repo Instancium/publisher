@@ -1,5 +1,4 @@
-using Instancium.Publisher.Core.Domain;
-using Instancium.Publisher.Domain.Versioning;
+﻿using Instancium.Publisher.Domain.Versioning;
 
 namespace Instancium.Publisher.Core.Interfaces
 {
