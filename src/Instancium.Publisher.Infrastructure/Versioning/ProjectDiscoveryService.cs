@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Services.Versioning;
+﻿namespace Instancium.Publisher.Infrastructure.Versioning;
 
 using Instancium.Publisher.Application.Abstractions;
 using System;
