@@ -1,8 +1,8 @@
 ﻿namespace Instancium.Publisher.Tui.Workspaces;
 
-using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Tui.Abstractions;
 using Instancium.Publisher.Application.Pipeline;
+using Instancium.Publisher.Application.Workflows;
+using Instancium.Publisher.Tui.Abstractions;
 using Spectre.Console;
 using System;
 using System.Text;
@@ -11,18 +11,14 @@ using System.Threading.Tasks;
 
 public sealed class CommitWorkspace : ITuiWorkspace
 {
-    private readonly IGitService _gitService;
-    private readonly IAiCommitAssistant _aiAssistant;
+    private readonly CommitWorkflow _workflow;
 
     public string Name => "Commit Control Center";
     public string Description => "Stage files and generate AI commit message (Streaming)";
 
-    public CommitWorkspace(
-        IGitService gitService,
-        IAiCommitAssistant aiAssistant)
+    public CommitWorkspace(CommitWorkflow workflow)
     {
-        _gitService = gitService;
-        _aiAssistant = aiAssistant;
+        _workflow = workflow;
     }
 
     public async Task ExecuteAsync(CancellationToken ct = default)
@@ -31,19 +27,16 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
         try
         {
+            CommitInspectionResult inspection = null!;
             await TuiProgressReporter.RunWithLiveStatusAsync(
                 "Staging files and analyzing diff...",
-                async () => await _gitService.AddAllAsync(ct), ct);
+                async () => { inspection = await _workflow.StageAndInspectAsync(ct); }, ct);
 
-            string diff = await _gitService.GetCachedDiffAsync(ct);
-            string diffStat = await _gitService.GetCachedDiffStatAsync(ct);
-
-            if (string.IsNullOrWhiteSpace(diff))
+            if (!inspection.HasChanges)
             {
-                if (await _gitService.HasUnpushedCommitsAsync(ct))
+                if (inspection.HasUnpushedCommits)
                 {
-                    string branch = await _gitService.GetCurrentBranchAsync(ct);
-                    AnsiConsole.MarkupLine($"[yellow]Working directory is clean, but branch '{Markup.Escape(branch)}' has unpushed local commit(s).[/]");
+                    AnsiConsole.MarkupLine($"[yellow]Working directory is clean, but branch '{Markup.Escape(inspection.CurrentBranch)}' has unpushed local commit(s).[/]");
 
                     var pushPendingChoice = AnsiConsole.Prompt(
                         new SelectionPrompt<string>()
@@ -52,7 +45,7 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
                     if (pushPendingChoice == "Push to Remote")
                     {
-                        await PushWithRetryLoopAsync(branch, ct);
+                        await PushWithRetryLoopAsync(inspection.CurrentBranch, ct);
                     }
 
                     PauseAndReturn();
@@ -66,7 +59,7 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             var messageBuilder = new StringBuilder();
 
-            await using var enumerator = _aiAssistant.StreamCommitMessageAsync(diff, diffStat, ct).GetAsyncEnumerator(ct);
+            await using var enumerator = _workflow.StreamCommitMessageAsync(inspection.Diff, inspection.DiffStat, ct).GetAsyncEnumerator(ct);
             bool hasData = false;
 
             // Phase 1: Progress bar + spinner status (automatically clears before streaming)
@@ -102,13 +95,13 @@ public sealed class CommitWorkspace : ITuiWorkspace
 
             if (choice == "Approve and Push")
             {
+                string currentBranch = string.Empty;
                 await TuiProgressReporter.RunWithLiveStatusAsync(
                     "Committing changes locally...",
-                    async () => await _gitService.CommitAsync(context.CommitMessage, ct),
+                    async () => { currentBranch = await _workflow.CommitAndGetBranchAsync(context.CommitMessage, ct); },
                     ct);
 
                 AnsiConsole.MarkupLine("[green]Local commit created.[/]");
-                string currentBranch = await _gitService.GetCurrentBranchAsync(ct);
                 await PushWithRetryLoopAsync(currentBranch, ct);
             }
             else
@@ -133,7 +126,7 @@ public sealed class CommitWorkspace : ITuiWorkspace
             {
                 await TuiProgressReporter.RunWithLiveStatusAsync(
                     $"Pushing '{branchName}' to remote...",
-                    async () => await _gitService.PushBranchAsync(branchName, force: false, ct),
+                    async () => await _workflow.PushBranchAsync(branchName, ct),
                     ct);
 
                 AnsiConsole.MarkupLine("[bold green]Successfully pushed changes to remote![/]");

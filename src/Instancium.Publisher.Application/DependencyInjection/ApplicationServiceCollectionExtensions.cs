@@ -2,6 +2,7 @@ using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Application.Pipeline.Steps;
 using Instancium.Publisher.Application.State;
 using Instancium.Publisher.Application.Versioning;
+using Instancium.Publisher.Application.Workflows;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Domain.Versioning.Strategies;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,8 +27,8 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddSingleton<ProjectContext>();
         services.AddTransient<BumpVersionStep>();
-        services.AddTransient<GenerateCommitMessageStep>();
         services.AddTransient<MergeAndPublishStep>();
+        services.AddTransient<CommitWorkflow>();
 
         return services;
     }
