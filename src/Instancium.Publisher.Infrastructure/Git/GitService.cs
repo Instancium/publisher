@@ -83,11 +83,16 @@ public sealed class GitService : IGitService
             }
         }
 
+        AppendExcludedPathspecs(args);
         return _processRunner.GetOutputAsync("git", args, _projectContext.WorkingDirectory, ct);
     }
 
-    public Task<string> GetCachedDiffStatAsync(CancellationToken ct = default) =>
-        _processRunner.GetOutputAsync("git", ["diff", "--cached", "-M", "--stat"], _projectContext.WorkingDirectory, ct);
+    public Task<string> GetCachedDiffStatAsync(CancellationToken ct = default)
+    {
+        var args = new List<string> { "diff", "--cached", "-M", "--stat" };
+        AppendExcludedPathspecs(args);
+        return _processRunner.GetOutputAsync("git", args, _projectContext.WorkingDirectory, ct);
+    }
 
     public async Task CommitAsync(string message, CancellationToken ct = default)
     {
@@ -166,14 +171,22 @@ public sealed class GitService : IGitService
     }
 
     /// <summary>
-    /// Resolves the highest Semantic Version tag in the repository, falling back to version refname sorting.
+    /// Resolves the highest Semantic Version tag reachable from HEAD so release boundaries
+    /// never anchor to tags from unrelated branches.
     /// </summary>
     public async Task<string> GetLatestTagAsync(bool stableOnly = false, CancellationToken ct = default)
     {
-        string output = await _processRunner.GetOutputAsync("git", ["tag", "--sort=-v:refname"], _projectContext.WorkingDirectory, ct);
-        string[] tags = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        string output = await _processRunner.GetOutputAsync(
+            "git",
+            ["tag", "--merged", "HEAD", "--sort=-v:refname"],
+            _projectContext.WorkingDirectory,
+            ct);
 
-        if (tags.Length == 0) return string.Empty;
+        string[] tags = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tags.Length == 0)
+        {
+            return string.Empty;
+        }
 
         string? highestTag = null;
         SemanticVersion? highestVersion = null;
@@ -182,7 +195,6 @@ public sealed class GitService : IGitService
         {
             if (TryParseSemanticVersion(tag, out SemanticVersion? parsed) && parsed is not null)
             {
-                // Ignore pre-releases if we only need a stable anchor
                 if (stableOnly && parsed.IsPreRelease)
                 {
                     continue;
@@ -196,12 +208,29 @@ public sealed class GitService : IGitService
             }
         }
 
-        return highestTag ?? tags[0];
+        if (highestTag is not null)
+        {
+            return highestTag;
+        }
+
+        return stableOnly ? string.Empty : tags[0];
     }
 
+    /// <summary>
+    /// Retrieves structured commit records (hash, subject, body, compact stat) delimited by
+    /// ASCII Record Separator (0x1E) and Unit Separator (0x1F) to support atomic noise filtering
+    /// without losing multi-line commit bodies.
+    /// </summary>
     public Task<string> GetCommitLogAsync(string? fromTag, bool ignorePreReleaseTags = false, CancellationToken ct = default)
     {
-        var args = new List<string> { "log", "--oneline", "--no-merges", "--name-status", "-M" };
+        var args = new List<string>
+    {
+        "log",
+        "--no-merges",
+        "--format=%x1e%h%x1f%s%x1f%b%x1f",
+        "--stat=120,100",
+        "-M"
+    };
 
         if (string.IsNullOrWhiteSpace(fromTag))
         {
@@ -216,16 +245,42 @@ public sealed class GitService : IGitService
             args.Add("--not");
             if (ignorePreReleaseTags)
             {
-                // Git magic: --exclude=*-* makes --tags ignore any tags containing a hyphen.
-                // According to SemVer, pre-releases always contain a hyphen (v1.6.0-rc.1), while stable releases do not (v1.6.0).
                 args.Add("--exclude=*-*");
             }
+
             args.Add("--tags");
         }
 
+        AppendExcludedPathspecs(args);
         return _processRunner.GetOutputAsync("git", args, _projectContext.WorkingDirectory, ct);
     }
 
+
+    private void AppendExcludedPathspecs(List<string> args)
+    {
+        var opt = _settings.DiffOptimization;
+        if (!opt.Enabled || opt.ExcludedPathspecs is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var validPatterns = opt.ExcludedPathspecs
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .ToList();
+
+        if (validPatterns.Count == 0)
+        {
+            return;
+        }
+
+        args.Add("--");
+        args.Add(".");
+        foreach (string pattern in validPatterns)
+        {
+            args.Add($":(exclude){pattern}");
+        }
+    }
 
     /// <summary>
     /// Creates or updates an annotated release tag and pushes it to the remote repository with retry support.
