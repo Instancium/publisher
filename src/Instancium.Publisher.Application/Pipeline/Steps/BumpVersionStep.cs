@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Pipeline.Steps;
+﻿namespace Instancium.Publisher.Application.Pipeline.Steps;
 
 using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Domain.Versioning;
