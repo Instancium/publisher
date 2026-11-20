@@ -29,6 +29,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddTransient<BumpVersionStep>();
         services.AddTransient<MergeAndPublishStep>();
         services.AddTransient<CommitWorkflow>();
+        services.AddTransient<ReleaseWorkflow>();
+        services.AddTransient<ReleaseRecoveryService>();
 
         return services;
     }
