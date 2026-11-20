@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Services.Ai;
+﻿namespace Instancium.Publisher.Infrastructure.Ai;
 
 using System.Collections.Generic;
 using System.IO;

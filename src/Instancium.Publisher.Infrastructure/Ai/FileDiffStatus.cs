@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Services.Ai;
+﻿namespace Instancium.Publisher.Infrastructure.Ai;
 
 /// <summary>
 /// Represents a single file path and its Git change status (ADDED, MODIFIED, DELETED, RENAMED)

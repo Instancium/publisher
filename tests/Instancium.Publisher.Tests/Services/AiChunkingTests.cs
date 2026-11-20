@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Tests.Services;
 
-using Instancium.Publisher.Services.Ai;
+using Instancium.Publisher.Infrastructure.Ai;
 using System.Collections.Generic;
 using Xunit;
 
