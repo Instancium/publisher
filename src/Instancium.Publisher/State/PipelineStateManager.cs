@@ -3,7 +3,7 @@
 using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.Application.State;
 
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Abstractions;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;

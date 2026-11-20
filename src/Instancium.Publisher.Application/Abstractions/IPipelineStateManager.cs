@@ -1,6 +1,6 @@
 ﻿using Instancium.Publisher.Application.Pipeline;
 
-namespace Instancium.Publisher.Core.Interfaces
+namespace Instancium.Publisher.Application.Abstractions
 {
     public interface IPipelineStateManager
     {
