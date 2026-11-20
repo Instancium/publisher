@@ -1,4 +1,4 @@
-﻿using Instancium.Publisher.Core.Exceptions;
+﻿using Instancium.Publisher.Domain.Exceptions;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
 using System.Xml;

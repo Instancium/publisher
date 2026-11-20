@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Tui.Workspaces;
 
-using Instancium.Publisher.Core.Exceptions;
+using Instancium.Publisher.Domain.Exceptions;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Pipeline.Steps;
