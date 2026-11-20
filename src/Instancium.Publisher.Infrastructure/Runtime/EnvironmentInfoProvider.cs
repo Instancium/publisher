@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Services.Runtime;
+﻿namespace Instancium.Publisher.Infrastructure.Runtime;
 
 using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Domain.Runtime;
@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 /// Provides runtime diagnostics: the compiled assembly version and the real active model
 /// identifier queried from the gateway, with a configured-value fallback for display purposes.
 /// </summary>
-internal sealed class EnvironmentInfoProvider : IEnvironmentInfoProvider
+public sealed class EnvironmentInfoProvider : IEnvironmentInfoProvider
 {
     private readonly PublisherSettings _settings;
     private readonly IGatewayTelemetryClient _telemetryClient;
