@@ -1,4 +1,4 @@
-# Refactoring Progress
+﻿# Refactoring Progress
 
 Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 
@@ -8,7 +8,7 @@ Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 - [x] Phase 0, Step 3: Create `Directory.Build.props` (`7f146c9`)
 - [x] Phase 0, Step 4: Create `Directory.Packages.props`
 - [x] Phase 0, Step 5: Remove `Version` attributes and duplicated properties from `.csproj` files (81 tests passing)
-- [ ] Phase 1: Extract Domain
+- [x] Phase 1: Extract Domain (commits `33d9769`, `c741754`, `dbfad40`, `74d110b`, `7350084`, `3003b4b`; 81 tests passing)
 - [ ] Phase 2: Extract Application
 - [ ] Phase 3: Extract Infrastructure
 - [ ] Phase 4: Finalize TUI host
@@ -18,4 +18,4 @@ Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 - [ ] Phase 8: Documentation and release
 
 ## Blocked
-(empty — append exact conflicts here and stop)
+(empty â€” append exact conflicts here and stop)
