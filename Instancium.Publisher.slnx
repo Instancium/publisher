@@ -5,5 +5,7 @@
     <Project Path="src/Instancium.Publisher.Infrastructure/Instancium.Publisher.Infrastructure.csproj" />
     <Project Path="src/Instancium.Publisher.Tui/Instancium.Publisher.Tui.csproj" />
   </Folder>
-  <Project Path="tests/Instancium.Publisher.Tests/Instancium.Publisher.Tests.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/Instancium.Publisher.Tests/Instancium.Publisher.Tests.csproj" />
+  </Folder>
 </Solution>
