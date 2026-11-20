@@ -1,7 +1,7 @@
 ﻿using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Application.Pipeline;
 
-namespace Instancium.Publisher.Pipeline.Steps;
+namespace Instancium.Publisher.Application.Pipeline.Steps;
 
 public class GitCommitAndPushStep
 {
