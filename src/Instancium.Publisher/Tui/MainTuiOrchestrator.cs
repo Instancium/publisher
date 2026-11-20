@@ -1,6 +1,7 @@
 ﻿namespace Instancium.Publisher.Tui;
 
 using Instancium.Publisher.Configuration;
+using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Application.State;
 using Instancium.Publisher.Tui.Components;

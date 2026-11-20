@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Core.Interfaces;
+﻿namespace Instancium.Publisher.Application.Abstractions;
 
 using System.Threading;
 using System.Threading.Tasks;
