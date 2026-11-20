@@ -36,8 +36,16 @@ public sealed class GitHubCliReleasePublisher : IReleasePublisher
         try
         {
             await File.WriteAllTextAsync(tempFilePath, notes, ct);
-            string preReleaseFlag = request.IsPreRelease ? " --prerelease" : string.Empty;
-            string arguments = $"release create {request.TagName} -t \"{request.Title}\" -F \"{tempFilePath}\"{preReleaseFlag}";
+            var arguments = new List<string>
+            {
+                "release", "create", request.TagName,
+                "-t", request.Title,
+                "-F", tempFilePath
+            };
+            if (request.IsPreRelease)
+            {
+                arguments.Add("--prerelease");
+            }
 
             var ghOutputBuilder = new StringBuilder();
             int ghExitCode = await _processService.ExecuteAsync(

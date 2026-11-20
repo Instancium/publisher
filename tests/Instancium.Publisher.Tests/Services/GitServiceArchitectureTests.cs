@@ -8,9 +8,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using Xunit;
 
 /// <summary>
@@ -57,7 +58,7 @@ public sealed class GitServiceArchitectureTests
         bool ignorePreReleaseTags = true; // This flag signifies a stable release build
 
         _processMock
-            .Setup(p => p.GetOutputAsync("git", It.IsAny<string>(), _context.WorkingDirectory, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetOutputAsync("git", It.IsAny<IReadOnlyList<string>>(), _context.WorkingDirectory, It.IsAny<CancellationToken>()))
             .ReturnsAsync("commit-log-data");
 
         // Act
@@ -67,18 +68,18 @@ public sealed class GitServiceArchitectureTests
         // The CRITICAL architectural constraint: 
         // When ignorePreReleaseTags is true, the Git command MUST include:
         // 1. --not --tags (to exclude past stable features)
-        // 2. --exclude="*-*" (to pierce through the boundaries of intermediate -rc.* tags and aggregate them)
+        // 2. --exclude=*-* (to pierce through the boundaries of intermediate -rc.* tags and aggregate them)
         _processMock.Verify(p => p.GetOutputAsync(
             "git",
-            It.Is<string>(args =>
+            It.Is<IReadOnlyList<string>>(args =>
                 args.Contains($"{fromTag}..HEAD") &&
                 args.Contains("--not") &&
-                args.Contains("--exclude=\"*-*\"") &&
+                args.Contains("--exclude=*-*") &&
                 args.Contains("--tags")),
             _context.WorkingDirectory,
             It.IsAny<CancellationToken>()),
             Times.Once,
-            "ARCHITECTURAL REGRESSION: The stable release changelog query MUST include '--not --exclude=\"*-*\" --tags' to correctly aggregate pre-release history.");
+            "ARCHITECTURAL REGRESSION: The stable release changelog query MUST include '--not --exclude=*-* --tags' to correctly aggregate pre-release history.");
     }
 
     [Fact]
@@ -91,7 +92,7 @@ public sealed class GitServiceArchitectureTests
         bool ignorePreReleaseTags = false; // This flag signifies a pre-release build
 
         _processMock
-            .Setup(p => p.GetOutputAsync("git", It.IsAny<string>(), _context.WorkingDirectory, It.IsAny<CancellationToken>()))
+            .Setup(p => p.GetOutputAsync("git", It.IsAny<IReadOnlyList<string>>(), _context.WorkingDirectory, It.IsAny<CancellationToken>()))
             .ReturnsAsync("commit-log-data");
 
         // Act
@@ -101,13 +102,14 @@ public sealed class GitServiceArchitectureTests
         // The CRITICAL architectural constraint: 
         // When ignorePreReleaseTags is false, the Git command MUST include:
         // 1. --not --tags
-        // It MUST NOT include --exclude="*-*" because we want the pipeline to stop exactly at the previous -rc.* tag.
+        // It MUST NOT include --exclude=*-* because we want the pipeline to stop exactly at the previous -rc.* tag.
         _processMock.Verify(p => p.GetOutputAsync(
             "git",
-            It.Is<string>(args =>
+            It.Is<IReadOnlyList<string>>(args =>
                 args.Contains($"{fromTag}..HEAD") &&
-                args.Contains("--not --tags") &&
-                !args.Contains("--exclude=\"*-*\"")),
+                args.Contains("--not") &&
+                args.Contains("--tags") &&
+                !args.Contains("--exclude=*-*")),
             _context.WorkingDirectory,
             It.IsAny<CancellationToken>()),
             Times.Once,

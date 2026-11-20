@@ -1,9 +1,8 @@
 ﻿namespace Instancium.Publisher.Infrastructure.Runtime;
 
-
 using Instancium.Publisher.Application.Abstractions;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +12,7 @@ public sealed class ProcessExecutionService : IProcessExecutionService
     // The process will be killed if it produces no output for 30 seconds
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
 
-    public async Task<int> ExecuteAsync(
+    public Task<int> ExecuteAsync(
         string executable,
         string arguments,
         string workingDirectory,
@@ -21,63 +20,123 @@ public sealed class ProcessExecutionService : IProcessExecutionService
         Action<string>? onStdErr = null,
         CancellationToken ct = default)
     {
-        using var idleCts = new CancellationTokenSource(IdleTimeout);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, idleCts.Token);
-
-        using var process = CreateProcess(executable, arguments, workingDirectory, redirectOutput: true);
-        process.Start();
-
-        // Read the streams and reset the idle timer on each process output
-        var outTask = ReadStreamWithIdleResetAsync(process.StandardOutput, onStdOut, idleCts, linkedCts.Token);
-        var errTask = ReadStreamWithIdleResetAsync(process.StandardError, onStdErr, idleCts, linkedCts.Token);
-
-        try
-        {
-            await process.WaitForExitAsync(linkedCts.Token);
-            await Task.WhenAll(outTask, errTask);
-            return process.ExitCode;
-        }
-        catch (OperationCanceledException) when (idleCts.IsCancellationRequested)
-        {
-            KillProcessTreeSafely(process);
-            throw new TimeoutException($"Process '{executable}' hung (no output for {IdleTimeout.TotalSeconds}s) and was terminated.");
-        }
+        return ExecuteCoreAsync(
+            CreateProcess(executable, arguments, workingDirectory, redirectOutput: true),
+            executable,
+            onStdOut,
+            onStdErr,
+            ct);
     }
 
-    // The same approach for GetOutputAsync...
-    public async Task<string> GetOutputAsync(
+    public Task<int> ExecuteAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Action<string>? onStdOut = null,
+        Action<string>? onStdErr = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return ExecuteCoreAsync(
+            CreateProcess(executable, arguments, workingDirectory, redirectOutput: true),
+            executable,
+            onStdOut,
+            onStdErr,
+            ct);
+    }
+
+    public Task<string> GetOutputAsync(
         string executable,
         string arguments,
         string workingDirectory,
         CancellationToken ct = default)
     {
+        return GetOutputCoreAsync(
+            CreateProcess(executable, arguments, workingDirectory, redirectOutput: true),
+            executable,
+            arguments,
+            ct);
+    }
+
+    public Task<string> GetOutputAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return GetOutputCoreAsync(
+            CreateProcess(executable, arguments, workingDirectory, redirectOutput: true),
+            executable,
+            string.Join(" ", arguments),
+            ct);
+    }
+
+    private static async Task<int> ExecuteCoreAsync(
+        Process process,
+        string executable,
+        Action<string>? onStdOut,
+        Action<string>? onStdErr,
+        CancellationToken ct)
+    {
         using var idleCts = new CancellationTokenSource(IdleTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, idleCts.Token);
+        using (process)
+        {
+            process.Start();
 
-        using var process = CreateProcess(executable, arguments, workingDirectory, redirectOutput: true);
+            // Read the streams and reset the idle timer on each process output
+            var outTask = ReadStreamWithIdleResetAsync(process.StandardOutput, onStdOut, idleCts, linkedCts.Token);
+            var errTask = ReadStreamWithIdleResetAsync(process.StandardError, onStdErr, idleCts, linkedCts.Token);
+
+            try
+            {
+                await process.WaitForExitAsync(linkedCts.Token);
+                await Task.WhenAll(outTask, errTask);
+                return process.ExitCode;
+            }
+            catch (OperationCanceledException) when (idleCts.IsCancellationRequested)
+            {
+                KillProcessTreeSafely(process);
+                throw new TimeoutException($"Process '{executable}' hung (no output for {IdleTimeout.TotalSeconds}s) and was terminated.");
+            }
+        }
+    }
+
+    private static async Task<string> GetOutputCoreAsync(
+        Process process,
+        string executable,
+        string argumentsDisplay,
+        CancellationToken ct)
+    {
+        using var idleCts = new CancellationTokenSource(IdleTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, idleCts.Token);
         var stdOutBuilder = new StringBuilder();
         var stdErrBuilder = new StringBuilder();
 
-        process.Start();
-
-        var outTask = ReadStreamWithIdleResetAsync(process.StandardOutput, msg => stdOutBuilder.AppendLine(msg), idleCts, linkedCts.Token);
-        var errTask = ReadStreamWithIdleResetAsync(process.StandardError, msg => stdErrBuilder.AppendLine(msg), idleCts, linkedCts.Token);
-
-        try
+        using (process)
         {
-            await process.WaitForExitAsync(linkedCts.Token);
-            await Task.WhenAll(outTask, errTask);
+            process.Start();
 
-            if (process.ExitCode != 0)
+            var outTask = ReadStreamWithIdleResetAsync(process.StandardOutput, msg => stdOutBuilder.AppendLine(msg), idleCts, linkedCts.Token);
+            var errTask = ReadStreamWithIdleResetAsync(process.StandardError, msg => stdErrBuilder.AppendLine(msg), idleCts, linkedCts.Token);
+
+            try
             {
-                throw new InvalidOperationException($"Command '{executable} {arguments}' failed (Exit: {process.ExitCode}). Error: {stdErrBuilder}");
+                await process.WaitForExitAsync(linkedCts.Token);
+                await Task.WhenAll(outTask, errTask);
+
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException($"Command '{executable} {argumentsDisplay}' failed (Exit: {process.ExitCode}). Error: {stdErrBuilder}");
+                }
+                return stdOutBuilder.ToString().Trim();
             }
-            return stdOutBuilder.ToString().Trim();
-        }
-        catch (OperationCanceledException) when (idleCts.IsCancellationRequested)
-        {
-            KillProcessTreeSafely(process);
-            throw new TimeoutException($"Process '{executable}' hung (no output for {IdleTimeout.TotalSeconds}s). Error output before hang: {stdErrBuilder}");
+            catch (OperationCanceledException) when (idleCts.IsCancellationRequested)
+            {
+                KillProcessTreeSafely(process);
+                throw new TimeoutException($"Process '{executable}' hung (no output for {IdleTimeout.TotalSeconds}s). Error output before hang: {stdErrBuilder}");
+            }
         }
     }
 
@@ -103,13 +162,12 @@ public sealed class ProcessExecutionService : IProcessExecutionService
 
     private static Process CreateProcess(string executable, string arguments, string workingDirectory, bool redirectOutput)
     {
-        bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         return new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = isWindows ? "cmd.exe" : executable,
-                Arguments = isWindows ? $"/c {executable} {arguments}" : arguments,
+                FileName = executable,
+                Arguments = arguments,
                 WorkingDirectory = workingDirectory,
                 UseShellExecute = false,
                 RedirectStandardOutput = redirectOutput,
@@ -119,6 +177,28 @@ public sealed class ProcessExecutionService : IProcessExecutionService
                 StandardErrorEncoding = Encoding.UTF8
             }
         };
+    }
+
+    private static Process CreateProcess(string executable, IReadOnlyList<string> arguments, string workingDirectory, bool redirectOutput)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = redirectOutput,
+            RedirectStandardError = redirectOutput,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        return new Process { StartInfo = startInfo };
     }
 
     private static void KillProcessTreeSafely(Process process)

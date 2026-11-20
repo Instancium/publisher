@@ -40,7 +40,7 @@ public sealed class GitService : IGitService
 
     public async Task<bool> HasUncommittedChangesAsync(CancellationToken ct = default)
     {
-        string status = await _processRunner.GetOutputAsync("git", "status --porcelain", _projectContext.WorkingDirectory, ct);
+        string status = await _processRunner.GetOutputAsync("git", ["status", "--porcelain"], _projectContext.WorkingDirectory, ct);
         return !string.IsNullOrWhiteSpace(status);
     }
 
@@ -48,7 +48,7 @@ public sealed class GitService : IGitService
     {
         try
         {
-            string countText = await _processRunner.GetOutputAsync("git", "rev-list @{u}..HEAD --count", _projectContext.WorkingDirectory, ct);
+            string countText = await _processRunner.GetOutputAsync("git", ["rev-list", "@{u}..HEAD", "--count"], _projectContext.WorkingDirectory, ct);
             return int.TryParse(countText.Trim(), out int count) && count > 0;
         }
         catch
@@ -59,26 +59,27 @@ public sealed class GitService : IGitService
 
     public async Task EnsureCleanWorkingDirectoryAsync(CancellationToken ct = default)
     {
-        string status = await _processRunner.GetOutputAsync("git", "status --porcelain", _projectContext.WorkingDirectory, ct);
+        string status = await _processRunner.GetOutputAsync("git", ["status", "--porcelain"], _projectContext.WorkingDirectory, ct);
         if (!string.IsNullOrWhiteSpace(status))
         {
             throw new InvalidOperationException("Working directory is not clean. Commit or stash your changes first.");
         }
     }
 
-    public Task AddAllAsync(CancellationToken ct = default) => ExecuteNoOutputAsync("add -A", ct);
+    public Task AddAllAsync(CancellationToken ct = default) => ExecuteNoOutputAsync(["add", "-A"], ct);
 
     public Task<string> GetCachedDiffAsync(CancellationToken ct = default)
     {
         var opt = _settings.DiffOptimization;
-        string args = "diff --cached -M";
+        var args = new List<string> { "diff", "--cached", "-M" };
 
         if (opt.Enabled)
         {
-            args += $" -U{opt.ContextLines}";
+            args.Add($"-U{opt.ContextLines}");
             if (opt.IgnoreWhitespace)
             {
-                args += " -w --ignore-blank-lines";
+                args.Add("-w");
+                args.Add("--ignore-blank-lines");
             }
         }
 
@@ -86,7 +87,7 @@ public sealed class GitService : IGitService
     }
 
     public Task<string> GetCachedDiffStatAsync(CancellationToken ct = default) =>
-        _processRunner.GetOutputAsync("git", "diff --cached -M --stat", _projectContext.WorkingDirectory, ct);
+        _processRunner.GetOutputAsync("git", ["diff", "--cached", "-M", "--stat"], _projectContext.WorkingDirectory, ct);
 
     public async Task CommitAsync(string message, CancellationToken ct = default)
     {
@@ -94,7 +95,7 @@ public sealed class GitService : IGitService
         try
         {
             await File.WriteAllTextAsync(tempFilePath, message, ct);
-            await ExecuteNoOutputAsync($"commit -F \"{tempFilePath}\"", ct);
+            await ExecuteNoOutputAsync(["commit", "-F", tempFilePath], ct);
         }
         finally
         {
@@ -106,31 +107,35 @@ public sealed class GitService : IGitService
     }
 
     public Task<string> GetCurrentBranchAsync(CancellationToken ct = default) =>
-        _processRunner.GetOutputAsync("git", "branch --show-current", _projectContext.WorkingDirectory, ct);
+        _processRunner.GetOutputAsync("git", ["branch", "--show-current"], _projectContext.WorkingDirectory, ct);
 
     public Task<string> GetRepositoryRootAsync(CancellationToken ct = default) =>
-        _processRunner.GetOutputAsync("git", "rev-parse --show-toplevel", _projectContext.WorkingDirectory, ct);
+        _processRunner.GetOutputAsync("git", ["rev-parse", "--show-toplevel"], _projectContext.WorkingDirectory, ct);
 
     public Task CheckoutBranchAsync(string branchName, bool createNew = false, CancellationToken ct = default)
     {
-        string args = createNew ? $"-b {branchName}" : branchName;
-        return ExecuteNoOutputAsync($"checkout {args}", ct);
+        IReadOnlyList<string> args = createNew
+            ? ["checkout", "-b", branchName]
+            : ["checkout", branchName];
+        return ExecuteNoOutputAsync(args, ct);
     }
 
     public Task PushBranchAsync(string branchName, bool force = false, CancellationToken ct = default)
     {
-        string args = force ? $"push -u origin {branchName} --force" : $"push origin {branchName}";
+        IReadOnlyList<string> args = force
+            ? ["push", "-u", "origin", branchName, "--force"]
+            : ["push", "origin", branchName];
         return ExecuteRemoteWithRetryAsync(args, ct);
     }
 
     public Task FetchAllAsync(CancellationToken ct = default) =>
-        ExecuteRemoteWithRetryAsync("fetch --all", ct);
+        ExecuteRemoteWithRetryAsync(["fetch", "--all"], ct);
 
     public async Task DeleteLocalBranchAsync(string branchName, CancellationToken ct = default)
     {
         try
         {
-            await ExecuteNoOutputAsync($"branch -D {branchName}", ct);
+            await ExecuteNoOutputAsync(["branch", "-D", branchName], ct);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
         {
@@ -142,7 +147,7 @@ public sealed class GitService : IGitService
         var errorBuilder = new StringBuilder();
         int exitCode = await _processRunner.ExecuteAsync(
             "git",
-            $"push origin --delete {branchName}",
+            ["push", "origin", "--delete", branchName],
             _projectContext.WorkingDirectory,
             null,
             msg => errorBuilder.AppendLine(msg),
@@ -165,7 +170,7 @@ public sealed class GitService : IGitService
     /// </summary>
     public async Task<string> GetLatestTagAsync(bool stableOnly = false, CancellationToken ct = default)
     {
-        string output = await _processRunner.GetOutputAsync("git", "tag --sort=-v:refname", _projectContext.WorkingDirectory, ct);
+        string output = await _processRunner.GetOutputAsync("git", ["tag", "--sort=-v:refname"], _projectContext.WorkingDirectory, ct);
         string[] tags = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         if (tags.Length == 0) return string.Empty;
@@ -196,17 +201,29 @@ public sealed class GitService : IGitService
 
     public Task<string> GetCommitLogAsync(string? fromTag, bool ignorePreReleaseTags = false, CancellationToken ct = default)
     {
-        // Git magic: --exclude="*-*" makes --tags ignore any tags containing a hyphen.
-        // According to SemVer, pre-releases always contain a hyphen (v1.6.0-rc.1), while stable releases do not (v1.6.0).
-        string notTagsArgs = ignorePreReleaseTags
-            ? "--not --exclude=\"*-*\" --tags"
-            : "--not --tags";
+        var args = new List<string> { "log", "--oneline", "--no-merges", "--name-status", "-M" };
 
-        string range = string.IsNullOrWhiteSpace(fromTag)
-            ? "-n 20"
-            : $"-n 50 {fromTag.Trim()}..HEAD {notTagsArgs}";
+        if (string.IsNullOrWhiteSpace(fromTag))
+        {
+            args.Add("-n");
+            args.Add("20");
+        }
+        else
+        {
+            args.Add("-n");
+            args.Add("50");
+            args.Add($"{fromTag.Trim()}..HEAD");
+            args.Add("--not");
+            if (ignorePreReleaseTags)
+            {
+                // Git magic: --exclude=*-* makes --tags ignore any tags containing a hyphen.
+                // According to SemVer, pre-releases always contain a hyphen (v1.6.0-rc.1), while stable releases do not (v1.6.0).
+                args.Add("--exclude=*-*");
+            }
+            args.Add("--tags");
+        }
 
-        return _processRunner.GetOutputAsync("git", $"log --oneline --no-merges --name-status -M {range}", _projectContext.WorkingDirectory, ct);
+        return _processRunner.GetOutputAsync("git", args, _projectContext.WorkingDirectory, ct);
     }
 
 
@@ -215,16 +232,16 @@ public sealed class GitService : IGitService
     /// </summary>
     public async Task TagAndPushAsync(string tagName, CancellationToken ct = default)
     {
-        await ExecuteNoOutputAsync($"tag -a {tagName} -m \"Release {tagName}\" -f", ct);
-        await ExecuteRemoteWithRetryAsync($"push origin {tagName} --force", ct);
+        await ExecuteNoOutputAsync(["tag", "-a", tagName, "-m", $"Release {tagName}", "-f"], ct);
+        await ExecuteRemoteWithRetryAsync(["push", "origin", tagName, "--force"], ct);
         // Brief pause after tag push to avoid GitHub ref-lock collisions on the immediate branch push
         await Task.Delay(500, ct);
     }
 
     public async Task RestoreAllAsync(CancellationToken ct = default)
     {
-        await ExecuteNoOutputAsync("reset --hard HEAD", ct);
-        await ExecuteNoOutputAsync("clean -fd", ct);
+        await ExecuteNoOutputAsync(["reset", "--hard", "HEAD"], ct);
+        await ExecuteNoOutputAsync(["clean", "-fd"], ct);
     }
 
     private static bool TryParseSemanticVersion(string rawTag, out SemanticVersion? version)
@@ -254,14 +271,15 @@ public sealed class GitService : IGitService
                errorText.Contains("The requested URL returned error: 5", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task ExecuteRemoteWithRetryAsync(string gitArguments, CancellationToken ct)
+    private async Task ExecuteRemoteWithRetryAsync(IReadOnlyList<string> gitArguments, CancellationToken ct)
     {
+        string argumentsDisplay = string.Join(" ", gitArguments);
         for (int attempt = 1; attempt <= MaxRemoteRetries; attempt++)
         {
             var errorBuilder = new StringBuilder();
             try
             {
-                _logger.LogDebug("Executing: git {Arguments} (Attempt {Attempt}/{Max})", gitArguments, attempt, MaxRemoteRetries);
+                _logger.LogDebug("Executing: git {Arguments} (Attempt {Attempt}/{Max})", argumentsDisplay, attempt, MaxRemoteRetries);
 
                 int exitCode = await _processRunner.ExecuteAsync(
                     "git",
@@ -278,24 +296,24 @@ public sealed class GitService : IGitService
 
                 if (attempt < MaxRemoteRetries && IsTransientRemoteError(errorDetails))
                 {
-                    await TriggerRetryDelayAsync(attempt, gitArguments, ct);
+                    await TriggerRetryDelayAsync(attempt, argumentsDisplay, ct);
                     continue;
                 }
 
-                throw new InvalidOperationException($"Git command 'git {gitArguments}' failed with exit code {exitCode}. Error Details: {errorDetails}");
+                throw new InvalidOperationException($"Git command 'git {argumentsDisplay}' failed with exit code {exitCode}. Error Details: {errorDetails}");
             }
             catch (TimeoutException ex) when (attempt < MaxRemoteRetries)
             {
-                _logger.LogWarning(ex, "Git command timed out: {Arguments}", gitArguments);
+                _logger.LogWarning(ex, "Git command timed out: {Arguments}", argumentsDisplay);
                 await _progressReporter.ReportWarningAsync(
-                    $"Git process hung on 'git {gitArguments}'. Terminated by Idle Timeout. Cleaning up locks...", ct);
+                    $"Git process hung on 'git {argumentsDisplay}'. Terminated by Idle Timeout. Cleaning up locks...", ct);
 
                 string lockPath = Path.Combine(_projectContext.WorkingDirectory, ".git", "index.lock");
                 if (File.Exists(lockPath))
                 {
                     try { File.Delete(lockPath); } catch { }
                 }
-                await TriggerRetryDelayAsync(attempt, gitArguments, ct);
+                await TriggerRetryDelayAsync(attempt, argumentsDisplay, ct);
             }
         }
     }
@@ -309,8 +327,9 @@ public sealed class GitService : IGitService
         await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
     }
 
-    private async Task ExecuteNoOutputAsync(string gitArguments, CancellationToken ct)
+    private async Task ExecuteNoOutputAsync(IReadOnlyList<string> gitArguments, CancellationToken ct)
     {
+        string argumentsDisplay = string.Join(" ", gitArguments);
         var errorBuilder = new StringBuilder();
         int exitCode = await _processRunner.ExecuteAsync(
             "git",
@@ -323,7 +342,7 @@ public sealed class GitService : IGitService
         if (exitCode != 0)
         {
             string errorDetails = errorBuilder.ToString().Trim();
-            throw new InvalidOperationException($"Git command 'git {gitArguments}' failed with exit code {exitCode}. Error Details: {errorDetails}");
+            throw new InvalidOperationException($"Git command 'git {argumentsDisplay}' failed with exit code {exitCode}. Error Details: {errorDetails}");
         }
     }
 }
