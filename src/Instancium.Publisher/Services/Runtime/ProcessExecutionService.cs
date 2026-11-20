@@ -1,7 +1,7 @@
-namespace Instancium.Publisher.Services.Runtime;
+﻿namespace Instancium.Publisher.Services.Runtime;
 
 
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Abstractions;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
