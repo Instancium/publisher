@@ -1,8 +1,5 @@
 ﻿namespace Instancium.Publisher.Infrastructure.Configuration;
 
-using System;
-using System.Collections.Generic;
-
 /// <summary>
 /// Strongly typed configuration for Instancium.Publisher execution.
 /// </summary>
@@ -17,8 +14,6 @@ public sealed class PublisherSettings
     public string AiModelId { get; set; } = "qwen3-vl-8b-instruct";
     public string AiApiKey { get; set; } = string.Empty;
     public int MaxChunkLength { get; set; } = 3000;
-
-    public Dictionary<string, string> RegisteredProjects { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public DiffOptimizationSettings DiffOptimization { get; set; } = new();
 }

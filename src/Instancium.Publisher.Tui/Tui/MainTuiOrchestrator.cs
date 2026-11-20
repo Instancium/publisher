@@ -5,6 +5,7 @@ using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Tui.Abstractions;
 using Instancium.Publisher.Application.State;
 using Instancium.Publisher.Tui.Components;
+using Instancium.Publisher.Tui.Configuration;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
 using System;
@@ -20,6 +21,7 @@ public sealed class MainTuiOrchestrator
     private readonly IEnumerable<ITuiWorkspace> _workspaces;
     private readonly IGitService _gitService;
     private readonly PublisherSettings _settings;
+    private readonly NavigationSettings _navigationSettings;
     private readonly ProjectContext _projectContext;
     private readonly IEnvironmentInfoProvider _infoProvider;
 
@@ -29,12 +31,14 @@ public sealed class MainTuiOrchestrator
         IEnumerable<ITuiWorkspace> workspaces,
         IGitService gitService,
         IOptions<PublisherSettings> settings,
+        IOptions<NavigationSettings> navigationSettings,
         ProjectContext projectContext,
         IEnvironmentInfoProvider infoProvider)
     {
         _workspaces = workspaces;
         _gitService = gitService;
         _settings = settings.Value;
+        _navigationSettings = navigationSettings.Value;
         _infoProvider = infoProvider;
         _projectContext = projectContext;
     }
@@ -69,7 +73,7 @@ public sealed class MainTuiOrchestrator
 
     private bool TryValidateNavigationConfiguration()
     {
-        if (_settings.RegisteredProjects == null || _settings.RegisteredProjects.Count == 0)
+        if (_navigationSettings.RegisteredProjects == null || _navigationSettings.RegisteredProjects.Count == 0)
         {
             RenderFatalConfigurationError(
                 "No projects configured.",
@@ -77,7 +81,7 @@ public sealed class MainTuiOrchestrator
             return false;
         }
 
-        if (_settings.RegisteredProjects.Keys.Contains(ExitMenuLabel, StringComparer.OrdinalIgnoreCase))
+        if (_navigationSettings.RegisteredProjects.Keys.Contains(ExitMenuLabel, StringComparer.OrdinalIgnoreCase))
         {
             RenderFatalConfigurationError(
                 $"Registered project name '{ExitMenuLabel}' is reserved by the navigation menu.",
@@ -122,7 +126,7 @@ public sealed class MainTuiOrchestrator
             .AddColumn(new GridColumn());
 
         grid.AddRow("[dim]Active AI Engine:[/]", $"[cyan]{Markup.Escape(modelId)}[/]");
-        grid.AddRow("[dim]Loaded Projects:[/]", $"[white]{_settings.RegisteredProjects.Count}[/]");
+        grid.AddRow("[dim]Loaded Projects:[/]", $"[white]{_navigationSettings.RegisteredProjects.Count}[/]");
         grid.AddRow("[dim]Gateway URL:[/]", $"[dim]{Markup.Escape(_settings.AiGatewayUrl ?? "N/A")}[/]");
 
         AnsiConsole.Write(
@@ -142,7 +146,7 @@ public sealed class MainTuiOrchestrator
         NavigationBreadcrumbsBar.Render("Projects", "Select Target Repository Context");
 
         var formattedProjects = TwoColumnMenuFormatter.FormatRows(
-            _settings.RegisteredProjects.ToList(),
+            _navigationSettings.RegisteredProjects.ToList(),
             kvp => kvp.Key,
             kvp => kvp.Value);
 
@@ -166,7 +170,7 @@ public sealed class MainTuiOrchestrator
     private void ApplyProjectContext(string projectChoice)
     {
         _projectContext.Name = projectChoice;
-        string targetPath = _settings.RegisteredProjects[projectChoice];
+        string targetPath = _navigationSettings.RegisteredProjects[projectChoice];
         _projectContext.WorkingDirectory = targetPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
             ? Path.GetDirectoryName(targetPath) ?? string.Empty
             : targetPath;
