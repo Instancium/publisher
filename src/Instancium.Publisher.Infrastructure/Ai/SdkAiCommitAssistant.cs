@@ -72,6 +72,8 @@ public sealed class SdkAiCommitAssistant : IAiCommitAssistant
         string diffStat,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        EnsureApiKeyConfigured();
+
         List<FileDiffStatus> totalFileStatuses = GitDiffStatusParser.ExtractFileStatuses(diff);
         string optimizedDiff = _diffOptimizer.Optimize(diff);
         int safeChunkChars = await ResolveSafeChunkCharsAsync(ct).ConfigureAwait(false);
@@ -113,6 +115,15 @@ public sealed class SdkAiCommitAssistant : IAiCommitAssistant
         }
     }
 
+    private void EnsureApiKeyConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.AiApiKey))
+        {
+            throw new InvalidOperationException(
+                "AI API key is not configured. Set PublisherSettings:AiApiKey via the environment variable PublisherSettings__AiApiKey or appsettings.json.");
+        }
+    }
+
     public async Task<string> GenerateCommitMessageAsync(string diff, string diffStat, CancellationToken ct = default)
     {
         var builder = new StringBuilder();
@@ -142,6 +153,8 @@ public sealed class SdkAiCommitAssistant : IAiCommitAssistant
         string gitLog,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        EnsureApiKeyConfigured();
+
         string filteredLog = ReleaseNotesPromptBuilder.FilterReleaseNoise(gitLog);
         int safeLimit = await ResolveSafeChunkCharsAsync(ct).ConfigureAwait(false);
 
