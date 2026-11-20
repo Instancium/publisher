@@ -1,7 +1,7 @@
-namespace Instancium.Publisher.Services.Ai;
+﻿namespace Instancium.Publisher.Services.Ai;
 
 using Instancium.Publisher.Configuration;
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Abstractions;
 using Microsoft.Extensions.Options;
 using System;
 using System.Text;

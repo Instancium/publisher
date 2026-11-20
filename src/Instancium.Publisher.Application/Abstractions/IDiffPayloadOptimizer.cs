@@ -1,4 +1,4 @@
-namespace Instancium.Publisher.Core.Interfaces;
+﻿namespace Instancium.Publisher.Application.Abstractions;
 
 /// <summary>
 /// Defines the contract for sanitizing and reducing Git diff payloads to minimize LLM token consumption.
