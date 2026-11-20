@@ -3,7 +3,7 @@ using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Application.Pipeline.Steps;
 using Instancium.Publisher.Services.Ai;
-using Instancium.Publisher.Services.Git;
+using Instancium.Publisher.Infrastructure.Git;
 using Instancium.Publisher.Services.Runtime;
 using Instancium.Publisher.Services.Versioning;
 using Instancium.Publisher.Application.State;

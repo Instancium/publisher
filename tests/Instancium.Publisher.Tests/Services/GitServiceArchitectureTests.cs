@@ -2,7 +2,7 @@
 
 using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Services.Git;
+using Instancium.Publisher.Infrastructure.Git;
 using Instancium.Publisher.Application.State;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

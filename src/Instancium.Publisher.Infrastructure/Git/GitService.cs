@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Services.Git;
+﻿namespace Instancium.Publisher.Infrastructure.Git;
 
 using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Application.Abstractions;
