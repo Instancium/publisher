@@ -1,19 +1,14 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Instancium.Publisher</AssemblyName>
+    <RootNamespace>Instancium.Publisher.Tui</RootNamespace>
     <Version>1.6.7</Version>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Keep existing SignalR for now (to be removed in Stage 3) -->
-    <PackageReference Include="InstantAIGate.Client" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
-    <!-- Added Hosting and Options for DI and Configuration -->
     <PackageReference Include="Microsoft.Extensions.Hosting" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
   <ItemGroup>

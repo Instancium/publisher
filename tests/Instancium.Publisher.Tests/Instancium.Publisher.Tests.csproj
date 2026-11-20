@@ -19,6 +19,6 @@
     <ProjectReference Include="..\..\src\Instancium.Publisher.Domain\Instancium.Publisher.Domain.csproj" />
     <ProjectReference Include="..\..\src\Instancium.Publisher.Application\Instancium.Publisher.Application.csproj" />
     <ProjectReference Include="..\..\src\Instancium.Publisher.Infrastructure\Instancium.Publisher.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\Instancium.Publisher\Instancium.Publisher.csproj" />
+    <ProjectReference Include="..\..\src\Instancium.Publisher.Tui\Instancium.Publisher.Tui.csproj" />
   </ItemGroup>
 </Project>
