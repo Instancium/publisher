@@ -25,11 +25,10 @@ public sealed class AiChunkingTests
         + public void MethodD() { }
         """;
 
-        int maxLimit = 100; 
+        int maxLimit = 100;
 
         // Act
-        List<string> chunks = SignalRAiCommitAssistant.ChunkDiffByFiles(rawDiff, maxLimit);
-
+        List<string> chunks = AiPayloadChunker.ChunkDiffByFiles(rawDiff, maxLimit);
         // Assert
         Assert.True(chunks.Count > 1, "Diff payload was not properly chunked.");
 
