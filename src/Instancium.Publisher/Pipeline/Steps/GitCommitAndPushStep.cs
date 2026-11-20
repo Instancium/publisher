@@ -1,5 +1,4 @@
 ﻿using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Application.Pipeline;
 
 namespace Instancium.Publisher.Pipeline.Steps;

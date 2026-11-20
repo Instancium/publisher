@@ -1,6 +1,6 @@
 ﻿using Instancium.Publisher.Domain.Versioning;
 
-namespace Instancium.Publisher.Core.Interfaces
+namespace Instancium.Publisher.Application.Abstractions
 {
     /// <summary>
     /// Versioning engine operating on repository scope: reads declared versions as snapshots

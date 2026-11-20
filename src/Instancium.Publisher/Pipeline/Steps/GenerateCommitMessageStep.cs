@@ -1,7 +1,6 @@
 ﻿namespace Instancium.Publisher.Pipeline.Steps;
 
 using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Application.Pipeline;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;

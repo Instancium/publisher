@@ -2,7 +2,6 @@
 
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Application.State;
 using Microsoft.Extensions.Logging;
