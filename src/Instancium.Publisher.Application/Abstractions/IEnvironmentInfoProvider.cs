@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Core.Interfaces;
+﻿namespace Instancium.Publisher.Application.Abstractions;
 
 using Instancium.Publisher.Domain.Runtime;
 using System.Threading;

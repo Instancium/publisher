@@ -2,7 +2,7 @@
 
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Domain.Runtime;
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Abstractions;
 using InstantAIGate.Client.Telemetry;
 using InstantAIGate.Core.Dtos.Status;
 using Microsoft.Extensions.Options;
