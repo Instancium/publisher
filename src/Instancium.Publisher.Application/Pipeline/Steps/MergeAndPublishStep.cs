@@ -3,7 +3,7 @@ using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.Application.State;
 using System.Text;
 
-namespace Instancium.Publisher.Pipeline.Steps;
+namespace Instancium.Publisher.Application.Pipeline.Steps;
 
 public class MergeAndPublishStep
 {

@@ -5,7 +5,6 @@ using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Application.Pipeline.Steps;
-using Instancium.Publisher.Pipeline.Steps;
 using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.Application.State;
 using Instancium.Publisher.Tui.Components;
