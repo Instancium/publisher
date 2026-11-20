@@ -1,6 +1,6 @@
-using Instancium.Publisher.Domain.Versioning;
+﻿using Instancium.Publisher.Domain.Versioning;
 
-namespace Instancium.Publisher.State;
+namespace Instancium.Publisher.Application.Pipeline;
 
 public class PipelineContext
 {

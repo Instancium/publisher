@@ -1,6 +1,7 @@
-namespace Instancium.Publisher.Tests.TestInfrastructure;
+﻿namespace Instancium.Publisher.Tests.TestInfrastructure;
 
 using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.State;
 using System.Collections.Generic;
 using System.Threading.Tasks;

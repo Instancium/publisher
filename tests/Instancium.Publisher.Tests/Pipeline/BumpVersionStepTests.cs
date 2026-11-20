@@ -3,6 +3,7 @@
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Pipeline.Steps;
 using Instancium.Publisher.Services.Versioning;
+using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.State;
 using Instancium.Publisher.Tests.TestInfrastructure;
 using System;
