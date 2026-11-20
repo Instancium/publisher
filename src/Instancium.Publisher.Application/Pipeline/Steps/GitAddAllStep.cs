@@ -1,6 +1,6 @@
 ﻿using Instancium.Publisher.Application.Abstractions;
 
-namespace Instancium.Publisher.Pipeline.Steps;
+namespace Instancium.Publisher.Application.Pipeline.Steps;
 
 public class GitAddAllStep
 {
