@@ -15,7 +15,7 @@ Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 - [x] Phase 5: Extension seams (commits `1bfbf92`..`HEAD`; 81 tests passing)
 - [x] Phase 6: Extract workflows from TUI (commits `0e4b781`, `HEAD`; 81 tests passing)
 - [x] Phase 7: Hardening (commits `74560d0`, `HEAD`; 81 tests passing)
-- [ ] Phase 8: Documentation and release
+- [x] Phase 8: Documentation and release (ADRs + README committed; Step 8.3 version bump excluded by operator; 81 tests passing)
 
 ## Blocked
 (empty â€” append exact conflicts here and stop)
