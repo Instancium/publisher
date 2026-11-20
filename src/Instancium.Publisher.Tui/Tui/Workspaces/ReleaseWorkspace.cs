@@ -25,6 +25,7 @@ public sealed class ReleaseWorkspace(
     IAiCommitAssistant aiAssistant,
     ProjectContext projectContext,
     IVersionEngine versionEngine,
+    IVersionBumpService versionBumpService,
     IProjectDiscoveryService projectDiscovery,
     IEnvironmentInfoProvider infoProvider) : ITuiWorkspace
 {
@@ -35,14 +36,15 @@ public sealed class ReleaseWorkspace(
     private readonly IAiCommitAssistant _aiAssistant = aiAssistant;
     private readonly ProjectContext _projectContext = projectContext;
     private readonly IVersionEngine _versionEngine = versionEngine;
+    private readonly IVersionBumpService _versionBumpService = versionBumpService;
     private readonly IProjectDiscoveryService _projectDiscovery = projectDiscovery;
     private readonly IEnvironmentInfoProvider _infoProvider = infoProvider;
 
     public string Name => "Release Master & Recovery";
     public string Description => "End-to-End release pipeline with AI Changelog and rollback capability";
 
-    private record MenuOption(VersionBumpStrategy? Strategy);
-    private record StrategyMenuChoice(VersionBumpStrategy? Strategy, string Display);
+    private record MenuOption(IVersionBumpStrategy? Strategy);
+    private record StrategyMenuChoice(IVersionBumpStrategy? Strategy, string Display);
 
     private string AppendSignatureFooter(string releaseNotes, string modelId)
     {
@@ -113,21 +115,21 @@ public sealed class ReleaseWorkspace(
 
                 RenderContextPanel(repositoryVersion, snapshots, repositoryRoot);
 
-                VersionBumpStrategy? strategy = null;
-                string? customVersion = null;
+                string? strategyId = null;
+                VersionBumpContext? bumpContext = null;
 
                 if (activeContext.NewVersion is null)
                 {
-                    (strategy, customVersion) = PromptVersionStrategy(repositoryVersion);
-                    if (strategy is null)
+                    string? customVersion;
+                    (strategyId, customVersion) = PromptVersionStrategy(repositoryVersion);
+                    if (strategyId is null)
                     {
                         return;
                     }
 
+                    bumpContext = customVersion is null ? null : new VersionBumpContext(CustomVersion: customVersion);
                     activeContext.CurrentVersion = repositoryVersion;
-                    activeContext.NewVersion = repositoryVersion is null
-                        ? RepositoryVersionPolicy.CalculateInitialVersion(strategy.Value, customVersionString: customVersion)
-                        : _versionEngine.CalculateNext(repositoryVersion, strategy.Value, customVersionString: customVersion);
+                    activeContext.NewVersion = _versionBumpService.CalculateNext(repositoryVersion, strategyId, bumpContext);
                 }
                 else
                 {
@@ -145,7 +147,7 @@ public sealed class ReleaseWorkspace(
 
                 await TuiProgressReporter.RunWithLiveStatusAsync(
                     "Bumping repository version...",
-                    async () => await _bumpStep.ExecuteAsync(activeContext, snapshots, strategy, customVersion, ct),
+                    async () => await _bumpStep.ExecuteAsync(activeContext, snapshots, strategyId, bumpContext, ct),
                     ct);
 
                 AnsiConsole.MarkupLine($"[green]Repository version set to v{activeContext.NewVersion} across {projectPaths.Count} project(s).[/]");
@@ -278,20 +280,36 @@ public sealed class ReleaseWorkspace(
         }
     }
 
-    private (VersionBumpStrategy? Strategy, string? CustomVersion) PromptVersionStrategy(SemanticVersion? currentVersion)
+    private (string? StrategyId, string? CustomVersion) PromptVersionStrategy(SemanticVersion? currentVersion)
     {
         AnsiConsole.WriteLine();
         NavigationBreadcrumbsBar.Render("Projects", _projectContext.Name, "Release", "Select Bump Strategy");
 
-        var rawOptions = Enum.GetValues<VersionBumpStrategy>()
+        var rawOptions = _versionBumpService.Strategies
             .Select(s => new MenuOption(s))
             .ToList();
         rawOptions.Add(new MenuOption(null));
 
+        SemanticVersion baseline = currentVersion ?? RepositoryVersionPolicy.InitialVersion;
+
         var formattedLookup = TwoColumnMenuFormatter.FormatRows(
             rawOptions,
-            opt => GetStrategyTitle(opt.Strategy),
-            opt => GetStrategyPreview(opt.Strategy, currentVersion));
+            opt => opt.Strategy?.DisplayName ?? "Return to Menu",
+            opt =>
+            {
+                if (opt.Strategy is null)
+                {
+                    return "Exit to Main CLI";
+                }
+
+                if (opt.Strategy.RequiresCustomVersion)
+                {
+                    return opt.Strategy.Description;
+                }
+
+                SemanticVersion next = _versionBumpService.CalculateNext(currentVersion, opt.Strategy.Id);
+                return $"{baseline} u{2192} {next}";
+            });
 
         var choices = rawOptions
             .Select(opt => new StrategyMenuChoice(opt.Strategy, formattedLookup[opt]))
@@ -309,9 +327,9 @@ public sealed class ReleaseWorkspace(
             return (null, null);
         }
 
-        if (selectedChoice.Strategy != VersionBumpStrategy.Custom)
+        if (!selectedChoice.Strategy.RequiresCustomVersion)
         {
-            return (selectedChoice.Strategy, null);
+            return (selectedChoice.Strategy.Id, null);
         }
 
         while (true)
@@ -327,56 +345,13 @@ public sealed class ReleaseWorkspace(
 
             try
             {
-                return (VersionBumpStrategy.Custom, _versionEngine.Parse(rawVersion).ToString());
+                return (selectedChoice.Strategy.Id, SemanticVersion.Parse(rawVersion).ToString());
             }
             catch (FormatException)
             {
                 AnsiConsole.MarkupLine($"[red]'{Markup.Escape(rawVersion)}' is not a valid SemVer 2.0 string. Try again.[/]");
             }
         }
-    }
-
-    private static string GetStrategyTitle(VersionBumpStrategy? strategy) => strategy switch
-    {
-        null => "Return to Menu",
-        VersionBumpStrategy.Patch => "Patch",
-        VersionBumpStrategy.Minor => "Minor",
-        VersionBumpStrategy.Major => "Major",
-        VersionBumpStrategy.NewPreReleasePatch => "Pre-Release Patch",
-        VersionBumpStrategy.NewPreReleaseMinor => "Pre-Release Minor",
-        VersionBumpStrategy.NewPreReleaseMajor => "Pre-Release Major",
-        VersionBumpStrategy.PreReleaseIteration => "Pre-Release Iteration",
-        VersionBumpStrategy.PromoteToRelease => "Promote To Release",
-        VersionBumpStrategy.Custom => "Custom",
-        _ => strategy.ToString() ?? string.Empty
-    };
-
-    private string GetStrategyPreview(VersionBumpStrategy? strategy, SemanticVersion? currentVersion)
-    {
-        if (!strategy.HasValue)
-        {
-            return "Exit to Main CLI";
-        }
-
-        SemanticVersion baseline = currentVersion ?? RepositoryVersionPolicy.InitialVersion;
-
-        return strategy.Value switch
-        {
-            VersionBumpStrategy.Patch => $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.Patch)}",
-            VersionBumpStrategy.Minor => $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.Minor)}",
-            VersionBumpStrategy.Major => $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.Major)}",
-            VersionBumpStrategy.NewPreReleasePatch => $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.NewPreReleasePatch)}",
-            VersionBumpStrategy.NewPreReleaseMinor => $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.NewPreReleaseMinor)}",
-            VersionBumpStrategy.NewPreReleaseMajor => $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.NewPreReleaseMajor)}",
-            VersionBumpStrategy.PreReleaseIteration => baseline.IsPreRelease
-                ? $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.PreReleaseIteration)}"
-                : $"{baseline} â†’ {baseline.Major}.{baseline.Minor}.{baseline.Patch + 1}-rc.1",
-            VersionBumpStrategy.PromoteToRelease => baseline.IsPreRelease
-                ? $"{baseline} â†’ {_versionEngine.CalculateNext(baseline, VersionBumpStrategy.PromoteToRelease)}"
-                : "No active pre-release tag",
-            VersionBumpStrategy.Custom => "User defined SemVer 2.0",
-            _ => string.Empty
-        };
     }
 
     private async Task CheckoutReleaseBranchAsync(string branchName, CancellationToken ct)

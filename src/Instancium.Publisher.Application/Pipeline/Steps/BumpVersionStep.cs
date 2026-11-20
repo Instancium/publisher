@@ -18,19 +18,24 @@ using System.Threading.Tasks;
 public sealed class BumpVersionStep
 {
     private readonly IVersionEngine _engine;
+    private readonly IVersionBumpService _bumpService;
     private readonly IPipelineStateManager _stateManager;
 
-    public BumpVersionStep(IVersionEngine engine, IPipelineStateManager stateManager)
+    public BumpVersionStep(
+        IVersionEngine engine,
+        IVersionBumpService bumpService,
+        IPipelineStateManager stateManager)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+        _bumpService = bumpService ?? throw new ArgumentNullException(nameof(bumpService));
         _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
     }
 
     public async Task ExecuteAsync(
         PipelineContext context,
         IReadOnlyList<ProjectVersionSnapshot> snapshots,
-        VersionBumpStrategy? strategy,
-        string? customVersionString = null,
+        string? strategyId,
+        VersionBumpContext? bumpContext = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -42,19 +47,14 @@ public sealed class BumpVersionStep
 
         if (context.NewVersion is null)
         {
-            if (strategy is null)
+            if (string.IsNullOrWhiteSpace(strategyId))
             {
                 throw new InvalidOperationException("Version bump strategy is required when the pipeline context has no planned version.");
             }
 
-            // strategy is guaranteed non-null here after the check above.
-            VersionBumpStrategy strategyValue = strategy.Value;
-
             SemanticVersion? declaredVersion = RepositoryVersionPolicy.TryResolveCurrentVersion(snapshots);
             context.CurrentVersion = declaredVersion;
-            context.NewVersion = declaredVersion is null
-                ? RepositoryVersionPolicy.CalculateInitialVersion(strategyValue, customVersionString: customVersionString)
-                : _engine.CalculateNext(declaredVersion, strategyValue, customVersionString: customVersionString);
+            context.NewVersion = _bumpService.CalculateNext(declaredVersion, strategyId, bumpContext);
             await _stateManager.SaveAsync(context);
         }
 

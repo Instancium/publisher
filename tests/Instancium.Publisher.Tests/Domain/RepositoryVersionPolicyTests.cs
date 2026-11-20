@@ -58,25 +58,27 @@ public sealed class RepositoryVersionPolicyTests
     }
 
     [Theory]
-    [InlineData(VersionBumpStrategy.Patch)]
-    [InlineData(VersionBumpStrategy.Minor)]
-    [InlineData(VersionBumpStrategy.Major)]
-    [InlineData(VersionBumpStrategy.PromoteToRelease)]
-    public void CalculateInitialVersion_StableStrategies_ReturnBaseline(VersionBumpStrategy strategy)
+    [InlineData(KnownVersionBumpStrategies.Patch)]
+    [InlineData(KnownVersionBumpStrategies.Minor)]
+    [InlineData(KnownVersionBumpStrategies.Major)]
+    [InlineData(KnownVersionBumpStrategies.PromoteToRelease)]
+    public void CalculateInitialVersion_StableStrategies_ReturnBaseline(string strategyId)
     {
-        SemanticVersion initial = RepositoryVersionPolicy.CalculateInitialVersion(strategy);
+        var bumpService = Instancium.Publisher.Tests.TestInfrastructure.VersioningTestFactory.CreateBumpService();
+        SemanticVersion initial = bumpService.CalculateNext(current: null, strategyId);
 
         Assert.Equal("1.0.0", initial.ToString());
     }
 
     [Theory]
-    [InlineData(VersionBumpStrategy.PreReleaseIteration)]
-    [InlineData(VersionBumpStrategy.NewPreReleasePatch)]
-    [InlineData(VersionBumpStrategy.NewPreReleaseMinor)]
-    [InlineData(VersionBumpStrategy.NewPreReleaseMajor)]
-    public void CalculateInitialVersion_PreReleaseStrategies_ReturnTaggedBaseline(VersionBumpStrategy strategy)
+    [InlineData(KnownVersionBumpStrategies.PreReleaseIteration)]
+    [InlineData(KnownVersionBumpStrategies.NewPreReleasePatch)]
+    [InlineData(KnownVersionBumpStrategies.NewPreReleaseMinor)]
+    [InlineData(KnownVersionBumpStrategies.NewPreReleaseMajor)]
+    public void CalculateInitialVersion_PreReleaseStrategies_ReturnTaggedBaseline(string strategyId)
     {
-        SemanticVersion initial = RepositoryVersionPolicy.CalculateInitialVersion(strategy);
+        var bumpService = Instancium.Publisher.Tests.TestInfrastructure.VersioningTestFactory.CreateBumpService();
+        SemanticVersion initial = bumpService.CalculateNext(current: null, strategyId);
 
         Assert.Equal("1.0.0-rc.1", initial.ToString());
     }
@@ -84,9 +86,11 @@ public sealed class RepositoryVersionPolicyTests
     [Fact]
     public void CalculateInitialVersion_CustomPreReleaseTag_UsesProvidedTag()
     {
-        SemanticVersion initial = RepositoryVersionPolicy.CalculateInitialVersion(
-            VersionBumpStrategy.NewPreReleaseMinor,
-            preReleaseTag: "beta");
+        var bumpService = Instancium.Publisher.Tests.TestInfrastructure.VersioningTestFactory.CreateBumpService();
+        SemanticVersion initial = bumpService.CalculateNext(
+            current: null,
+            KnownVersionBumpStrategies.NewPreReleaseMinor,
+            new VersionBumpContext(PreReleaseTag: "beta"));
 
         Assert.Equal("1.0.0-beta.1", initial.ToString());
     }
@@ -94,9 +98,11 @@ public sealed class RepositoryVersionPolicyTests
     [Fact]
     public void CalculateInitialVersion_CustomStrategy_ParsesProvidedString()
     {
-        SemanticVersion initial = RepositoryVersionPolicy.CalculateInitialVersion(
-            VersionBumpStrategy.Custom,
-            customVersionString: "v3.5.7");
+        var bumpService = Instancium.Publisher.Tests.TestInfrastructure.VersioningTestFactory.CreateBumpService();
+        SemanticVersion initial = bumpService.CalculateNext(
+            current: null,
+            KnownVersionBumpStrategies.Custom,
+            new VersionBumpContext(CustomVersion: "v3.5.7"));
 
         Assert.Equal("3.5.7", initial.ToString());
     }
@@ -104,8 +110,9 @@ public sealed class RepositoryVersionPolicyTests
     [Fact]
     public void CalculateInitialVersion_CustomStrategyWithoutString_ThrowsArgumentException()
     {
+        var bumpService = Instancium.Publisher.Tests.TestInfrastructure.VersioningTestFactory.CreateBumpService();
         Assert.Throws<ArgumentException>(() =>
-            RepositoryVersionPolicy.CalculateInitialVersion(VersionBumpStrategy.Custom));
+            bumpService.CalculateNext(current: null, KnownVersionBumpStrategies.Custom));
     }
 
     [Fact]

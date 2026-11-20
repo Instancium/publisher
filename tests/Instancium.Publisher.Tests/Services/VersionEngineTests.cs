@@ -102,22 +102,23 @@ public sealed class VersionEngineTests
     }
 
     [Theory]
-    [InlineData("1.0.0", VersionBumpStrategy.Patch, "1.0.1")]
-    [InlineData("1.0.1-rc.1", VersionBumpStrategy.Patch, "1.0.1")]
-    [InlineData("1.0.0", VersionBumpStrategy.Minor, "1.1.0")]
-    [InlineData("1.0.9", VersionBumpStrategy.Minor, "1.1.0")]
-    [InlineData("1.0.0", VersionBumpStrategy.Major, "2.0.0")]
-    [InlineData("1.0.1-rc.1", VersionBumpStrategy.PreReleaseIteration, "1.0.1-rc.2")]
-    [InlineData("1.0.0", VersionBumpStrategy.PreReleaseIteration, "1.0.1-rc.1")]
-    [InlineData("1.0.0", VersionBumpStrategy.NewPreReleasePatch, "1.0.1-rc.1")]
-    [InlineData("1.0.1-rc.1", VersionBumpStrategy.NewPreReleasePatch, "1.0.1-rc.1")]
-    [InlineData("1.0.0", VersionBumpStrategy.NewPreReleaseMinor, "1.1.0-rc.1")]
-    [InlineData("1.0.0", VersionBumpStrategy.NewPreReleaseMajor, "2.0.0-rc.1")]
-    [InlineData("1.0.1-rc.2", VersionBumpStrategy.PromoteToRelease, "1.0.1")]
-    [InlineData("1.0.1", VersionBumpStrategy.PromoteToRelease, "1.0.1")]
-    public void CalculateNext_AppliesStrategyMatrix(string currentRaw, VersionBumpStrategy strategy, string expected)
+    [InlineData("1.0.0", KnownVersionBumpStrategies.Patch, "1.0.1")]
+    [InlineData("1.0.1-rc.1", KnownVersionBumpStrategies.Patch, "1.0.1")]
+    [InlineData("1.0.0", KnownVersionBumpStrategies.Minor, "1.1.0")]
+    [InlineData("1.0.9", KnownVersionBumpStrategies.Minor, "1.1.0")]
+    [InlineData("1.0.0", KnownVersionBumpStrategies.Major, "2.0.0")]
+    [InlineData("1.0.1-rc.1", KnownVersionBumpStrategies.PreReleaseIteration, "1.0.1-rc.2")]
+    [InlineData("1.0.0", KnownVersionBumpStrategies.PreReleaseIteration, "1.0.1-rc.1")]
+    [InlineData("1.0.0", KnownVersionBumpStrategies.NewPreReleasePatch, "1.0.1-rc.1")]
+    [InlineData("1.0.1-rc.1", KnownVersionBumpStrategies.NewPreReleasePatch, "1.0.1-rc.1")]
+    [InlineData("1.0.0", KnownVersionBumpStrategies.NewPreReleaseMinor, "1.1.0-rc.1")]
+    [InlineData("1.0.0", KnownVersionBumpStrategies.NewPreReleaseMajor, "2.0.0-rc.1")]
+    [InlineData("1.0.1-rc.2", KnownVersionBumpStrategies.PromoteToRelease, "1.0.1")]
+    [InlineData("1.0.1", KnownVersionBumpStrategies.PromoteToRelease, "1.0.1")]
+    public void CalculateNext_AppliesStrategyMatrix(string currentRaw, string strategyId, string expected)
     {
-        SemanticVersion next = _engine.CalculateNext(SemanticVersion.Parse(currentRaw), strategy);
+        var bumpService = VersioningTestFactory.CreateBumpService();
+        SemanticVersion next = bumpService.CalculateNext(SemanticVersion.Parse(currentRaw), strategyId);
 
         Assert.Equal(expected, next.ToString());
     }
@@ -125,10 +126,11 @@ public sealed class VersionEngineTests
     [Fact]
     public void CalculateNext_CustomStrategy_UsesProvidedString()
     {
-        SemanticVersion next = _engine.CalculateNext(
+        var bumpService = VersioningTestFactory.CreateBumpService();
+        SemanticVersion next = bumpService.CalculateNext(
             SemanticVersion.Parse("1.0.0"),
-            VersionBumpStrategy.Custom,
-            customVersionString: "v4.5.6");
+            KnownVersionBumpStrategies.Custom,
+            new VersionBumpContext(CustomVersion: "v4.5.6"));
 
         Assert.Equal("4.5.6", next.ToString());
     }
@@ -136,7 +138,8 @@ public sealed class VersionEngineTests
     [Fact]
     public void CalculateNext_CustomStrategyWithoutString_ThrowsArgumentException()
     {
+        var bumpService = VersioningTestFactory.CreateBumpService();
         Assert.Throws<ArgumentException>(() =>
-            _engine.CalculateNext(SemanticVersion.Parse("1.0.0"), VersionBumpStrategy.Custom));
+            bumpService.CalculateNext(SemanticVersion.Parse("1.0.0"), KnownVersionBumpStrategies.Custom));
     }
 }

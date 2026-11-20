@@ -18,6 +18,7 @@ using Xunit;
 public sealed class BumpVersionStepTests
 {
     private readonly VersionEngine _engine = new();
+    private readonly Instancium.Publisher.Application.Abstractions.IVersionBumpService _bumpService = VersioningTestFactory.CreateBumpService();
 
     [Fact]
     public async Task ExecuteAsync_NoDeclaredVersions_StampsBaselineIntoEveryProject()
@@ -26,12 +27,12 @@ public sealed class BumpVersionStepTests
         string projectA = CsprojFileFactory.Create(scope.CreateDirectory("src/A"), "A.csproj", version: null);
         string projectB = CsprojFileFactory.Create(scope.CreateDirectory("src/B"), "B.csproj", version: null);
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
         var context = new PipelineContext { CurrentStep = 1 };
         IReadOnlyList<ProjectVersionSnapshot> snapshots =
             await _engine.ReadProjectVersionsAsync(new[] { projectA, projectB });
 
-        await step.ExecuteAsync(context, snapshots, VersionBumpStrategy.Patch);
+        await step.ExecuteAsync(context, snapshots, KnownVersionBumpStrategies.Patch);
 
         Assert.Null(context.CurrentVersion);
         Assert.Equal("1.0.0", context.NewVersion?.ToString());
@@ -50,12 +51,12 @@ public sealed class BumpVersionStepTests
         string projectB = CsprojFileFactory.Create(scope.CreateDirectory("src/B"), "B.csproj", version: "1.5.3");
         string projectC = CsprojFileFactory.Create(scope.CreateDirectory("tests/C"), "C.csproj", version: null);
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
         var context = new PipelineContext { CurrentStep = 1 };
         IReadOnlyList<ProjectVersionSnapshot> snapshots =
             await _engine.ReadProjectVersionsAsync(new[] { projectA, projectB, projectC });
 
-        await step.ExecuteAsync(context, snapshots, VersionBumpStrategy.Minor);
+        await step.ExecuteAsync(context, snapshots, KnownVersionBumpStrategies.Minor);
 
         Assert.Equal("1.5.3", context.CurrentVersion?.ToString());
         Assert.Equal("1.6.0", context.NewVersion?.ToString());
@@ -70,12 +71,12 @@ public sealed class BumpVersionStepTests
         using var scope = new TemporaryDirectoryScope();
         string projectA = CsprojFileFactory.Create(scope.CreateDirectory("src/A"), "A.csproj", version: null);
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
         var context = new PipelineContext { CurrentStep = 1 };
         IReadOnlyList<ProjectVersionSnapshot> snapshots =
             await _engine.ReadProjectVersionsAsync(new[] { projectA });
 
-        await step.ExecuteAsync(context, snapshots, VersionBumpStrategy.NewPreReleaseMajor);
+        await step.ExecuteAsync(context, snapshots, KnownVersionBumpStrategies.NewPreReleaseMajor);
 
         Assert.Equal("1.0.0-rc.1", context.NewVersion?.ToString());
         Assert.Equal("1.0.0-rc.1", CsprojFileFactory.ReadVersionElementValue(projectA));
@@ -90,7 +91,7 @@ public sealed class BumpVersionStepTests
         string projectB = CsprojFileFactory.Create(scope.CreateDirectory("src/B"), "B.csproj", version: "2.0.0");
         string projectC = CsprojFileFactory.Create(scope.CreateDirectory("src/C"), "C.csproj", version: "1.9.0");
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
         var context = new PipelineContext
         {
             CurrentStep = 1,
@@ -100,7 +101,7 @@ public sealed class BumpVersionStepTests
         IReadOnlyList<ProjectVersionSnapshot> snapshots =
             await _engine.ReadProjectVersionsAsync(new[] { projectA, projectB, projectC });
 
-        await step.ExecuteAsync(context, snapshots, strategy: null);
+        await step.ExecuteAsync(context, snapshots, strategyId: null);
 
         Assert.Equal("2.0.0", CsprojFileFactory.ReadVersionElementValue(projectA));
         Assert.Equal("2.0.0", CsprojFileFactory.ReadVersionElementValue(projectB));
@@ -115,33 +116,33 @@ public sealed class BumpVersionStepTests
         using var scope = new TemporaryDirectoryScope();
         string projectA = CsprojFileFactory.Create(scope.CreateDirectory("src/A"), "A.csproj", version: "1.0.0");
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
         var context = new PipelineContext { CurrentStep = 1 };
         IReadOnlyList<ProjectVersionSnapshot> snapshots =
             await _engine.ReadProjectVersionsAsync(new[] { projectA });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => step.ExecuteAsync(context, snapshots, strategy: null));
+            () => step.ExecuteAsync(context, snapshots, strategyId: null));
     }
 
     [Fact]
     public async Task ExecuteAsync_EmptySnapshots_ThrowsArgumentException()
     {
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
         var context = new PipelineContext { CurrentStep = 1 };
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => step.ExecuteAsync(context, Array.Empty<ProjectVersionSnapshot>(), VersionBumpStrategy.Patch));
+            () => step.ExecuteAsync(context, Array.Empty<ProjectVersionSnapshot>(), KnownVersionBumpStrategies.Patch));
     }
 
     [Fact]
     public async Task ExecuteAsync_NullContext_ThrowsArgumentNullException()
     {
         var stateManager = new InMemoryPipelineStateManager();
-        var step = new BumpVersionStep(_engine, stateManager);
+        var step = new BumpVersionStep(_engine, _bumpService, stateManager);
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => step.ExecuteAsync(null!, Array.Empty<ProjectVersionSnapshot>(), VersionBumpStrategy.Patch));
+            () => step.ExecuteAsync(null!, Array.Empty<ProjectVersionSnapshot>(), KnownVersionBumpStrategies.Patch));
     }
 }

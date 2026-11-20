@@ -8,13 +8,6 @@ namespace Instancium.Publisher.Application.Abstractions
     /// </summary>
     public interface IVersionEngine
     {
-        SemanticVersion Parse(string rawVersion);
-        SemanticVersion CalculateNext(
-            SemanticVersion current,
-            VersionBumpStrategy strategy,
-            string? preReleaseTag = "rc",
-            string? customVersionString = null);
-
         Task<ProjectVersionSnapshot> ReadProjectVersionAsync(string projectPath, CancellationToken ct = default);
 
         Task<IReadOnlyList<ProjectVersionSnapshot>> ReadProjectVersionsAsync(

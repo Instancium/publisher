@@ -8,51 +8,13 @@ namespace Instancium.Publisher.Infrastructure.Versioning;
 
 public sealed class VersionEngine : IVersionEngine
 {
-    public SemanticVersion Parse(string rawVersion) => SemanticVersion.Parse(rawVersion);
-
-    public SemanticVersion CalculateNext(
-        SemanticVersion current,
-        VersionBumpStrategy strategy,
-        string? preReleaseTag = "rc",
-        string? customVersionString = null)
-    {
-        ArgumentNullException.ThrowIfNull(current);
-        string tag = string.IsNullOrWhiteSpace(preReleaseTag) ? "rc" : preReleaseTag.Trim();
-        return strategy switch
-        {
-            VersionBumpStrategy.Patch => current.IsPreRelease
-                ? new SemanticVersion(current.Major, current.Minor, current.Patch)
-                : new SemanticVersion(current.Major, current.Minor, current.Patch + 1),
-            VersionBumpStrategy.Minor => new SemanticVersion(current.Major, current.Minor + 1, 0),
-            VersionBumpStrategy.Major => new SemanticVersion(current.Major + 1, 0, 0),
-            VersionBumpStrategy.PreReleaseIteration => current.IsPreRelease
-                ? new SemanticVersion(current.Major, current.Minor, current.Patch, current.PreReleaseTag ?? tag, (current.PreReleaseIteration ?? 1) + 1)
-                : new SemanticVersion(current.Major, current.Minor, current.Patch + 1, tag, 1),
-            VersionBumpStrategy.NewPreReleasePatch => new SemanticVersion(
-                current.Major,
-                current.Minor,
-                current.IsPreRelease ? current.Patch : current.Patch + 1,
-                tag,
-                1),
-            VersionBumpStrategy.NewPreReleaseMinor => new SemanticVersion(current.Major, current.Minor + 1, 0, tag, 1),
-            VersionBumpStrategy.NewPreReleaseMajor => new SemanticVersion(current.Major + 1, 0, 0, tag, 1),
-            VersionBumpStrategy.PromoteToRelease => current.IsPreRelease
-                ? new SemanticVersion(current.Major, current.Minor, current.Patch)
-                : current,
-            VersionBumpStrategy.Custom => !string.IsNullOrWhiteSpace(customVersionString)
-                ? Parse(customVersionString)
-                : throw new ArgumentException("Custom version string required for Custom strategy.", nameof(customVersionString)),
-            _ => throw new ArgumentOutOfRangeException(nameof(strategy), $"Unsupported strategy: {strategy}")
-        };
-    }
-
     public async Task<ProjectVersionSnapshot> ReadProjectVersionAsync(string projectPath, CancellationToken ct = default)
     {
         XDocument document = await LoadDocumentAsync(projectPath, ct);
         XElement? versionElement = document.Root?.Descendants("Version").FirstOrDefault();
         SemanticVersion? declaredVersion = string.IsNullOrWhiteSpace(versionElement?.Value)
             ? null
-            : Parse(versionElement.Value);
+            : SemanticVersion.Parse(versionElement.Value);
         return new ProjectVersionSnapshot(projectPath, declaredVersion);
     }
 
