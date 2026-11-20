@@ -2,6 +2,7 @@ namespace Instancium.Publisher.Pipeline.Steps;
 
 using Instancium.Publisher.Core.Domain;
 using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.State;
 using System;
 using System.Collections.Generic;

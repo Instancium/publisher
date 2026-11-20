@@ -1,6 +1,6 @@
 namespace Instancium.Publisher.Tests.Domain;
 
-using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Domain.Versioning;
 using System;
 using Xunit;
 

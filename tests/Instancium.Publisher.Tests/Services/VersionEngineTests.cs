@@ -1,6 +1,7 @@
 namespace Instancium.Publisher.Tests.Services;
 
 using Instancium.Publisher.Core.Domain;
+using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Services.Versioning;
 using Instancium.Publisher.Tests.TestInfrastructure;
 using System;

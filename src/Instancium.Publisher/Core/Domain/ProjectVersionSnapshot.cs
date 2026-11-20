@@ -1,5 +1,7 @@
 namespace Instancium.Publisher.Core.Domain;
 
+using Instancium.Publisher.Domain.Versioning;
+
 /// <summary>
 /// Immutable snapshot of the version declared inside a single SDK-style project file.
 /// A null <see cref="DeclaredVersion"/> means the project does not declare a version at all,
