@@ -4,7 +4,7 @@ using Instancium.Publisher.Domain.Versioning;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace Instancium.Publisher.Services.Versioning;
+namespace Instancium.Publisher.Infrastructure.Versioning;
 
 public sealed class VersionEngine : IVersionEngine
 {

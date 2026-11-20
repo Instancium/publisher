@@ -5,6 +5,7 @@ using Instancium.Publisher.Application.Pipeline.Steps;
 using Instancium.Publisher.Infrastructure.Ai;
 using Instancium.Publisher.Infrastructure.Git;
 using Instancium.Publisher.Infrastructure.Runtime;
+using Instancium.Publisher.Infrastructure.Versioning;
 using Instancium.Publisher.Services.Versioning;
 using Instancium.Publisher.Application.State;
 using Instancium.Publisher.State;
