@@ -298,7 +298,7 @@ public sealed class ReleaseWorkspace(
     {
         int divergentProjects = RepositoryVersionPolicy.CountDivergentProjects(snapshots, repositoryVersion);
         string versionText = repositoryVersion is null
-            ? "[yellow]none declared (initial baseline 1.0.0)[/]
+            ? "[yellow]none declared (initial baseline 1.0.0)[/]"
             : $"[bold green]{repositoryVersion}[/]";
 
         string divergentText = divergentProjects == 0
