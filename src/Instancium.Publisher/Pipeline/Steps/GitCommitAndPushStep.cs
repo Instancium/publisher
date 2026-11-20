@@ -1,6 +1,5 @@
 ﻿using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Application.Pipeline;
-using Instancium.Publisher.State;
 
 namespace Instancium.Publisher.Pipeline.Steps;
 

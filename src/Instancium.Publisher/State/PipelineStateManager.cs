@@ -1,6 +1,7 @@
 ﻿namespace Instancium.Publisher.State;
 
 using Instancium.Publisher.Application.Pipeline;
+using Instancium.Publisher.Application.State;
 
 using Instancium.Publisher.Core.Interfaces;
 using Microsoft.Extensions.Logging;

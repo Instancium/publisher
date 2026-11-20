@@ -2,7 +2,7 @@
 
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Interfaces;
-using Instancium.Publisher.State;
+using Instancium.Publisher.Application.State;
 using Instancium.Publisher.Tui.Components;
 using Microsoft.Extensions.Options;
 using Spectre.Console;

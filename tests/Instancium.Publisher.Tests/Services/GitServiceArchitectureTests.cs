@@ -3,7 +3,7 @@
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Services.Git;
-using Instancium.Publisher.State;
+using Instancium.Publisher.Application.State;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;

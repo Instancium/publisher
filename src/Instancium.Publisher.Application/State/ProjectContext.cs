@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.State;
+﻿namespace Instancium.Publisher.Application.State;
 
 using System;
 

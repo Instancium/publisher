@@ -1,5 +1,4 @@
 ﻿using Instancium.Publisher.Application.Pipeline;
-using Instancium.Publisher.State;
 
 namespace Instancium.Publisher.Core.Interfaces
 {

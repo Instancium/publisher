@@ -3,7 +3,7 @@
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
-using Instancium.Publisher.State;
+using Instancium.Publisher.Application.State;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;

@@ -3,7 +3,6 @@
 using Instancium.Publisher.Core.Interfaces;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Application.Pipeline;
-using Instancium.Publisher.State;
 using System;
 using System.Collections.Generic;
 using System.Linq;
