@@ -11,7 +11,7 @@ Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 - [x] Phase 1: Extract Domain (commits `33d9769`, `c741754`, `dbfad40`, `74d110b`, `7350084`, `3003b4b`; 81 tests passing)
 - [x] Phase 2: Extract Application (commits `a09ea6b`..`a324095`; 81 tests passing)
 - [x] Phase 3: Extract Infrastructure (commits `fd64818`..`HEAD`; 81 tests passing)
-- [ ] Phase 4: Finalize TUI host
+- [x] Phase 4: Finalize TUI host (commits `d3385f6`..`ca536d9`; 81 tests passing)
 - [ ] Phase 5: Extension seams
 - [ ] Phase 6: Extract workflows from TUI
 - [ ] Phase 7: Hardening
