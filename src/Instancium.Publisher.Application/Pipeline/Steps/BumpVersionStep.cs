@@ -17,16 +17,16 @@ using System.Threading.Tasks;
 /// </summary>
 public sealed class BumpVersionStep
 {
-    private readonly IVersionEngine _engine;
+    private readonly IProjectVersionService _versionService;
     private readonly IVersionBumpService _bumpService;
     private readonly IPipelineStateManager _stateManager;
 
     public BumpVersionStep(
-        IVersionEngine engine,
+        IProjectVersionService versionService,
         IVersionBumpService bumpService,
         IPipelineStateManager stateManager)
     {
-        _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+        _versionService = versionService ?? throw new ArgumentNullException(nameof(versionService));
         _bumpService = bumpService ?? throw new ArgumentNullException(nameof(bumpService));
         _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
     }
@@ -59,6 +59,6 @@ public sealed class BumpVersionStep
         }
 
         IReadOnlyList<string> projectPaths = snapshots.Select(snapshot => snapshot.ProjectPath).ToList();
-        await _engine.WriteVersionToProjectsAsync(projectPaths, context.NewVersion, ct);
+        await _versionService.WriteVersionToProjectsAsync(projectPaths, context.NewVersion, ct);
     }
 }

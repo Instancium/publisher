@@ -22,6 +22,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IVersionBumpStrategy, PromoteToReleaseBumpStrategy>();
         services.AddSingleton<IVersionBumpStrategy, CustomBumpStrategy>();
         services.AddSingleton<IVersionBumpService, VersionBumpService>();
+        services.AddSingleton<IProjectVersionService, RepositoryVersionService>();
 
         services.AddSingleton<ProjectContext>();
         services.AddTransient<BumpVersionStep>();

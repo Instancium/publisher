@@ -1,6 +1,7 @@
-﻿namespace Instancium.Publisher.Tests.Services;
+namespace Instancium.Publisher.Tests.Services;
 
 using Instancium.Publisher.Infrastructure.Versioning;
+using Instancium.Publisher.Infrastructure.Versioning.DotNet;
 using Instancium.Publisher.Tests.TestInfrastructure;
 using System;
 using System.Collections.Generic;
@@ -10,13 +11,12 @@ using System.Threading.Tasks;
 using Xunit;
 
 /// <summary>
-/// Verifies repository-scoped project discovery: recursive search of SDK-style projects,
+/// Verifies repository-scoped project discovery: recursive search of ecosystem manifests,
 /// exclusion of build outputs and tooling directories, deterministic ordering and failure modes.
-/// The service is fully asynchronous: every failure surfaces through the awaited task.
 /// </summary>
-public sealed class ProjectDiscoveryServiceTests
+public sealed class RepositoryProjectScannerTests
 {
-    private readonly ProjectDiscoveryService _service = new();
+    private readonly RepositoryProjectScanner _scanner = new([new MsBuildProjectEcosystem()]);
 
     [Fact]
     public async Task DiscoverProjectFilesAsync_FindsProjectsRecursivelyInSortedOrder()
@@ -25,7 +25,7 @@ public sealed class ProjectDiscoveryServiceTests
         string rootProject = CsprojFileFactory.Create(scope.RootPath, "App.csproj", version: null);
         string nestedProject = CsprojFileFactory.Create(scope.CreateDirectory("src/Core"), "Core.csproj", version: null);
 
-        IReadOnlyList<string> discovered = await _service.DiscoverProjectFilesAsync(scope.RootPath);
+        IReadOnlyList<string> discovered = await _scanner.DiscoverProjectFilesAsync(scope.RootPath);
 
         Assert.Equal(new[] { rootProject, nestedProject }, discovered);
     }
@@ -41,7 +41,7 @@ public sealed class ProjectDiscoveryServiceTests
         CsprojFileFactory.Create(scope.CreateDirectory(".vs"), "Vs.csproj", version: null);
         CsprojFileFactory.Create(scope.CreateDirectory("node_modules/pkg"), "Pkg.csproj", version: null);
 
-        IReadOnlyList<string> discovered = await _service.DiscoverProjectFilesAsync(scope.RootPath);
+        IReadOnlyList<string> discovered = await _scanner.DiscoverProjectFilesAsync(scope.RootPath);
 
         Assert.Equal(new[] { validProject }, discovered);
     }
@@ -52,7 +52,7 @@ public sealed class ProjectDiscoveryServiceTests
         using var scope = new TemporaryDirectoryScope();
         scope.CreateDirectory("src/Empty");
 
-        IReadOnlyList<string> discovered = await _service.DiscoverProjectFilesAsync(scope.RootPath);
+        IReadOnlyList<string> discovered = await _scanner.DiscoverProjectFilesAsync(scope.RootPath);
 
         Assert.Empty(discovered);
     }
@@ -63,14 +63,14 @@ public sealed class ProjectDiscoveryServiceTests
         using var scope = new TemporaryDirectoryScope();
         string missingRoot = Path.Combine(scope.RootPath, "does-not-exist");
 
-        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => _service.DiscoverProjectFilesAsync(missingRoot));
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => _scanner.DiscoverProjectFilesAsync(missingRoot));
     }
 
     [Fact]
     public async Task DiscoverProjectFilesAsync_NullOrWhitespaceRoot_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _service.DiscoverProjectFilesAsync(string.Empty));
-        await Assert.ThrowsAsync<ArgumentException>(() => _service.DiscoverProjectFilesAsync("   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => _scanner.DiscoverProjectFilesAsync(string.Empty));
+        await Assert.ThrowsAsync<ArgumentException>(() => _scanner.DiscoverProjectFilesAsync("   "));
     }
 
     [Fact]
@@ -82,6 +82,6 @@ public sealed class ProjectDiscoveryServiceTests
         await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => _service.DiscoverProjectFilesAsync(scope.RootPath, cts.Token));
+            () => _scanner.DiscoverProjectFilesAsync(scope.RootPath, cts.Token));
     }
 }

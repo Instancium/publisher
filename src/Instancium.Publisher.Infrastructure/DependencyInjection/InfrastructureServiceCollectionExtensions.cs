@@ -5,6 +5,7 @@ using Instancium.Publisher.Infrastructure.Git;
 using Instancium.Publisher.Infrastructure.Runtime;
 using Instancium.Publisher.Infrastructure.State;
 using Instancium.Publisher.Infrastructure.Versioning;
+using Instancium.Publisher.Infrastructure.Versioning.DotNet;
 using InstantAIGate.Client.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,11 +47,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IEnvironmentInfoProvider, EnvironmentInfoProvider>();
         services.AddSingleton<IProcessExecutionService, ProcessExecutionService>();
         services.AddSingleton<IGitService, GitService>();
-        services.AddSingleton<IVersionEngine, VersionEngine>();
+        services.AddSingleton<IProjectEcosystem, MsBuildProjectEcosystem>();
         services.AddSingleton<IPipelineStateManager, PipelineStateManager>();
         services.AddSingleton<IDiffPayloadOptimizer, RegexDiffPayloadOptimizer>();
         services.AddSingleton<IAiCommitAssistant, SdkAiCommitAssistant>();
-        services.AddSingleton<IProjectDiscoveryService, ProjectDiscoveryService>();
+        services.AddSingleton<IProjectDiscoveryService, RepositoryProjectScanner>();
 
         return services;
     }

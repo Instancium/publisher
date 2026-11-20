@@ -24,7 +24,7 @@ public sealed class ReleaseWorkspace(
     MergeAndPublishStep publishStep,
     IAiCommitAssistant aiAssistant,
     ProjectContext projectContext,
-    IVersionEngine versionEngine,
+    IProjectVersionService versionEngine,
     IVersionBumpService versionBumpService,
     IProjectDiscoveryService projectDiscovery,
     IEnvironmentInfoProvider infoProvider) : ITuiWorkspace
@@ -35,7 +35,7 @@ public sealed class ReleaseWorkspace(
     private readonly MergeAndPublishStep _publishStep = publishStep;
     private readonly IAiCommitAssistant _aiAssistant = aiAssistant;
     private readonly ProjectContext _projectContext = projectContext;
-    private readonly IVersionEngine _versionEngine = versionEngine;
+    private readonly IProjectVersionService _versionEngine = versionEngine;
     private readonly IVersionBumpService _versionBumpService = versionBumpService;
     private readonly IProjectDiscoveryService _projectDiscovery = projectDiscovery;
     private readonly IEnvironmentInfoProvider _infoProvider = infoProvider;

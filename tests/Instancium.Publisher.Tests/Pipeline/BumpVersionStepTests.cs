@@ -1,8 +1,8 @@
 ﻿namespace Instancium.Publisher.Tests.Pipeline;
 
+using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Domain.Versioning;
 using Instancium.Publisher.Application.Pipeline.Steps;
-using Instancium.Publisher.Infrastructure.Versioning;
 using Instancium.Publisher.Application.Pipeline;
 using Instancium.Publisher.Tests.TestInfrastructure;
 using System;
@@ -17,8 +17,8 @@ using Xunit;
 /// </summary>
 public sealed class BumpVersionStepTests
 {
-    private readonly VersionEngine _engine = new();
-    private readonly Instancium.Publisher.Application.Abstractions.IVersionBumpService _bumpService = VersioningTestFactory.CreateBumpService();
+    private readonly IProjectVersionService _engine = VersioningTestFactory.CreateVersionService();
+    private readonly IVersionBumpService _bumpService = VersioningTestFactory.CreateBumpService();
 
     [Fact]
     public async Task ExecuteAsync_NoDeclaredVersions_StampsBaselineIntoEveryProject()

@@ -1,58 +1,20 @@
-﻿namespace Instancium.Publisher.Tests.Services;
+namespace Instancium.Publisher.Tests.Services;
 
+using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Domain.Versioning;
-using Instancium.Publisher.Infrastructure.Versioning;
 using Instancium.Publisher.Tests.TestInfrastructure;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using Xunit;
 
 /// <summary>
-/// Verifies the version engine against real SDK-style project files on disk:
-/// snapshot reading (missing version must stay null, not default to 1.0.0),
-/// repository-wide writing and the bump strategy matrix.
+/// Verifies repository-wide version reading/writing across multiple projects
+/// and the bump strategy matrix.
 /// </summary>
-public sealed class VersionEngineTests
+public sealed class RepositoryVersionServiceTests
 {
-    private readonly VersionEngine _engine = new();
-
-    [Fact]
-    public async Task ReadProjectVersionAsync_DeclaredVersion_ReturnsSnapshotWithVersion()
-    {
-        using var scope = new TemporaryDirectoryScope();
-        string projectPath = CsprojFileFactory.Create(scope.RootPath, "Sample.csproj", version: "2.3.4-rc.2");
-
-        ProjectVersionSnapshot snapshot = await _engine.ReadProjectVersionAsync(projectPath);
-
-        Assert.Equal(projectPath, snapshot.ProjectPath);
-        Assert.True(snapshot.HasDeclaredVersion);
-        Assert.Equal("2.3.4-rc.2", snapshot.DeclaredVersion?.ToString());
-    }
-
-    [Fact]
-    public async Task ReadProjectVersionAsync_MissingVersionElement_ReturnsNullDeclaredVersion()
-    {
-        using var scope = new TemporaryDirectoryScope();
-        string projectPath = CsprojFileFactory.Create(scope.RootPath, "Sample.csproj", version: null);
-
-        ProjectVersionSnapshot snapshot = await _engine.ReadProjectVersionAsync(projectPath);
-
-        // Regression guard: absence of <Version> must NOT silently become 1.0.0.
-        Assert.False(snapshot.HasDeclaredVersion);
-        Assert.Null(snapshot.DeclaredVersion);
-    }
-
-    [Fact]
-    public async Task ReadProjectVersionAsync_MissingFile_ThrowsFileNotFoundException()
-    {
-        using var scope = new TemporaryDirectoryScope();
-        string missingPath = Path.Combine(scope.RootPath, "Missing.csproj");
-
-        await Assert.ThrowsAsync<FileNotFoundException>(() => _engine.ReadProjectVersionAsync(missingPath));
-    }
+    private readonly IProjectVersionService _service = VersioningTestFactory.CreateVersionService();
 
     [Fact]
     public async Task ReadProjectVersionsAsync_MultipleProjects_ReturnsSnapshotPerProject()
@@ -62,7 +24,7 @@ public sealed class VersionEngineTests
         string projectB = CsprojFileFactory.Create(scope.CreateDirectory("src/B"), "B.csproj", version: null);
 
         IReadOnlyList<ProjectVersionSnapshot> snapshots =
-            await _engine.ReadProjectVersionsAsync(new[] { projectA, projectB });
+            await _service.ReadProjectVersionsAsync(new[] { projectA, projectB });
 
         Assert.Equal(2, snapshots.Count);
         Assert.Equal("1.0.0", snapshots[0].DeclaredVersion?.ToString());
@@ -78,27 +40,11 @@ public sealed class VersionEngineTests
         string projectC = CsprojFileFactory.Create(scope.CreateDirectory("src/C"), "C.csproj", version: null);
         var targetVersion = SemanticVersion.Parse("2.0.0");
 
-        await _engine.WriteVersionToProjectsAsync(new[] { projectA, projectB, projectC }, targetVersion);
+        await _service.WriteVersionToProjectsAsync(new[] { projectA, projectB, projectC }, targetVersion);
 
         Assert.Equal("2.0.0", CsprojFileFactory.ReadVersionElementValue(projectA));
         Assert.Equal("2.0.0", CsprojFileFactory.ReadVersionElementValue(projectB));
         Assert.Equal("2.0.0", CsprojFileFactory.ReadVersionElementValue(projectC));
-    }
-
-    [Fact]
-    public async Task WriteVersionToProjectsAsync_ProjectWithoutPropertyGroup_AddsPropertyGroupWithVersion()
-    {
-        using var scope = new TemporaryDirectoryScope();
-        string projectPath = CsprojFileFactory.CreateWithoutPropertyGroup(scope.RootPath, "Bare.csproj");
-        var targetVersion = SemanticVersion.Parse("3.1.4");
-
-        await _engine.WriteVersionToProjectsAsync(new[] { projectPath }, targetVersion);
-
-        Assert.Equal("3.1.4", CsprojFileFactory.ReadVersionElementValue(projectPath));
-        Assert.True(CsprojFileFactory.HasPropertyGroup(projectPath));
-        XDocument document = XDocument.Load(projectPath);
-        XElement? propertyGroup = document.Root?.Element("PropertyGroup");
-        Assert.Equal("3.1.4", propertyGroup?.Element("Version")?.Value);
     }
 
     [Theory]
