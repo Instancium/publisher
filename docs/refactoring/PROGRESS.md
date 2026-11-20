@@ -14,7 +14,7 @@ Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 - [x] Phase 4: Finalize TUI host (commits `d3385f6`..`ca536d9`; 81 tests passing)
 - [x] Phase 5: Extension seams (commits `1bfbf92`..`HEAD`; 81 tests passing)
 - [x] Phase 6: Extract workflows from TUI (commits `0e4b781`, `HEAD`; 81 tests passing)
-- [ ] Phase 7: Hardening
+- [x] Phase 7: Hardening (commits `74560d0`, `HEAD`; 81 tests passing)
 - [ ] Phase 8: Documentation and release
 
 ## Blocked
