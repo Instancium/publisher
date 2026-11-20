@@ -5,6 +5,12 @@ using System.Text;
 
 namespace Instancium.Publisher.Application.Pipeline.Steps;
 
+/// <summary>
+/// Merges the prepared release branch into the target branch, tags and publishes the release,
+/// and backports the tagged target branch commit into the source branch to keep branch topology aligned.
+/// Prefers fast-forward merges to avoid redundant merge commits, falling back to a forced merge
+/// only when branches have diverged.
+/// </summary>
 public class MergeAndPublishStep
 {
     private readonly IGitService _gitService;
@@ -40,7 +46,6 @@ public class MergeAndPublishStep
         }
 
         string versionTag = $"v{context.NewVersion}";
-        string mergeMessage = $"chore: merge release {versionTag}";
 
         await _gitService.CheckoutBranchAsync(targetBranch, false, ct);
 
@@ -57,35 +62,11 @@ public class MergeAndPublishStep
             throw new InvalidOperationException($"Failed to pull latest changes for {targetBranch}. Exit code: {pullExitCode}.\nGit Output: {pullOutputBuilder}");
         }
 
-        var mergeOutputBuilder = new StringBuilder();
-        await _processService.ExecuteAsync(
-            "git", ["merge", "--no-commit", "--no-ff", context.ReleaseBranch], _projectContext.WorkingDirectory,
-            msg => mergeOutputBuilder.AppendLine(msg),
-            msg => mergeOutputBuilder.AppendLine(msg),
+        await MergeBranchFastForwardOrForceAsync(
+            context.ReleaseBranch,
+            fallbackCommitMessage: $"chore: merge release {versionTag}",
+            operationName: "release merge",
             ct);
-
-        await _processService.ExecuteAsync(
-            "git", ["checkout", context.ReleaseBranch, "--", "."], _projectContext.WorkingDirectory,
-            null, null, ct);
-
-        await _processService.ExecuteAsync(
-            "git", ["add", "-A"], _projectContext.WorkingDirectory,
-            null, null, ct);
-
-        int commitCode = await _processService.ExecuteAsync(
-            "git", ["commit", "-m", mergeMessage], _projectContext.WorkingDirectory,
-            msg => mergeOutputBuilder.AppendLine(msg),
-            msg => mergeOutputBuilder.AppendLine(msg),
-            ct);
-
-        string fullMergeOutput = mergeOutputBuilder.ToString();
-        if (commitCode != 0 &&
-            !fullMergeOutput.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase) &&
-            !fullMergeOutput.Contains("Already up to date", StringComparison.OrdinalIgnoreCase))
-        {
-            await _processService.ExecuteAsync("git", ["merge", "--abort"], _projectContext.WorkingDirectory, null, null, ct);
-            throw new InvalidOperationException($"Failed to commit forced merge. Exit code: {commitCode}.\nGit Output:\n{fullMergeOutput}");
-        }
 
         await _gitService.TagAndPushAsync(versionTag, ct);
         await _gitService.PushBranchAsync(targetBranch, force: false, ct);
@@ -93,45 +74,16 @@ public class MergeAndPublishStep
         if (!string.Equals(context.SourceBranch, targetBranch, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(context.SourceBranch))
         {
-            await _progressReporter.ReportAsync($"Backporting release {versionTag} to {context.SourceBranch}...", ct);
+            await _progressReporter.ReportAsync($"Backporting release {versionTag} from {targetBranch} to {context.SourceBranch}...", ct);
             await _gitService.CheckoutBranchAsync(context.SourceBranch, false, ct);
 
-            int ffExitCode = await _processService.ExecuteAsync(
-                "git", ["merge", "--ff-only", context.ReleaseBranch], _projectContext.WorkingDirectory,
-                null, null, ct);
-
-            if (ffExitCode != 0)
-            {
-                var backportOutputBuilder = new StringBuilder();
-                await _processService.ExecuteAsync(
-                    "git", ["merge", "--no-commit", "--no-ff", context.ReleaseBranch], _projectContext.WorkingDirectory,
-                    msg => backportOutputBuilder.AppendLine(msg),
-                    msg => backportOutputBuilder.AppendLine(msg),
-                    ct);
-
-                await _processService.ExecuteAsync(
-                    "git", ["checkout", context.ReleaseBranch, "--", "."], _projectContext.WorkingDirectory,
-                    null, null, ct);
-
-                await _processService.ExecuteAsync(
-                    "git", ["add", "-A"], _projectContext.WorkingDirectory,
-                    null, null, ct);
-
-                int bpCommitCode = await _processService.ExecuteAsync(
-                    "git", ["commit", "-m", $"chore: backport release {versionTag} to {context.SourceBranch}"], _projectContext.WorkingDirectory,
-                    msg => backportOutputBuilder.AppendLine(msg),
-                    msg => backportOutputBuilder.AppendLine(msg),
-                    ct);
-
-                string fullBackportOutput = backportOutputBuilder.ToString();
-                if (bpCommitCode != 0 &&
-                    !fullBackportOutput.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase) &&
-                    !fullBackportOutput.Contains("Already up to date", StringComparison.OrdinalIgnoreCase))
-                {
-                    await _processService.ExecuteAsync("git", ["merge", "--abort"], _projectContext.WorkingDirectory, null, null, ct);
-                    throw new InvalidOperationException($"Backport merge failed. Exit code: {bpCommitCode}.\nGit Output:\n{fullBackportOutput}");
-                }
-            }
+            // Merge targetBranch (not ReleaseBranch) so SourceBranch receives the exact tagged commit
+            // and remains topologically aligned for subsequent `git tag --merged HEAD` lookups.
+            await MergeBranchFastForwardOrForceAsync(
+                targetBranch,
+                fallbackCommitMessage: $"chore: backport release {versionTag} to {context.SourceBranch}",
+                operationName: "backport merge",
+                ct);
 
             await _gitService.PushBranchAsync(context.SourceBranch, force: false, ct);
         }
@@ -143,5 +95,51 @@ public class MergeAndPublishStep
                 context.ReleaseNotes,
                 context.NewVersion.IsPreRelease),
             ct);
+    }
+
+    private async Task MergeBranchFastForwardOrForceAsync(
+        string branchToMerge,
+        string fallbackCommitMessage,
+        string operationName,
+        CancellationToken ct)
+    {
+        int ffExitCode = await _processService.ExecuteAsync(
+            "git", ["merge", "--ff-only", branchToMerge], _projectContext.WorkingDirectory,
+            null, null, ct);
+
+        if (ffExitCode == 0)
+        {
+            return;
+        }
+
+        var mergeOutputBuilder = new StringBuilder();
+        await _processService.ExecuteAsync(
+            "git", ["merge", "--no-commit", "--no-ff", branchToMerge], _projectContext.WorkingDirectory,
+            msg => mergeOutputBuilder.AppendLine(msg),
+            msg => mergeOutputBuilder.AppendLine(msg),
+            ct);
+
+        await _processService.ExecuteAsync(
+            "git", ["checkout", branchToMerge, "--", "."], _projectContext.WorkingDirectory,
+            null, null, ct);
+
+        await _processService.ExecuteAsync(
+            "git", ["add", "-A"], _projectContext.WorkingDirectory,
+            null, null, ct);
+
+        int commitCode = await _processService.ExecuteAsync(
+            "git", ["commit", "-m", fallbackCommitMessage], _projectContext.WorkingDirectory,
+            msg => mergeOutputBuilder.AppendLine(msg),
+            msg => mergeOutputBuilder.AppendLine(msg),
+            ct);
+
+        string fullOutput = mergeOutputBuilder.ToString();
+        if (commitCode != 0 &&
+            !fullOutput.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase) &&
+            !fullOutput.Contains("Already up to date", StringComparison.OrdinalIgnoreCase))
+        {
+            await _processService.ExecuteAsync("git", ["merge", "--abort"], _projectContext.WorkingDirectory, null, null, ct);
+            throw new InvalidOperationException($"Failed to commit forced {operationName}. Exit code: {commitCode}.\nGit Output:\n{fullOutput}");
+        }
     }
 }
