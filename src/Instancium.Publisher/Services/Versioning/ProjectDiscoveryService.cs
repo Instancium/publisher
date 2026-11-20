@@ -1,6 +1,6 @@
-namespace Instancium.Publisher.Services.Versioning;
+﻿namespace Instancium.Publisher.Services.Versioning;
 
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.IO;
