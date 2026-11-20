@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Instancium.Publisher.Application\Instancium.Publisher.Application.csproj" />
     <ProjectReference Include="..\Instancium.Publisher.Domain\Instancium.Publisher.Domain.csproj" />
+    <ProjectReference Include="..\Instancium.Publisher.Infrastructure\Instancium.Publisher.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="appsettings.json">

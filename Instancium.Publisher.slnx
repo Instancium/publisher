@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Instancium.Publisher.Application/Instancium.Publisher.Application.csproj" />
     <Project Path="src/Instancium.Publisher.Domain/Instancium.Publisher.Domain.csproj" />
+    <Project Path="src/Instancium.Publisher.Infrastructure/Instancium.Publisher.Infrastructure.csproj" />
   </Folder>
   <Project Path="src/Instancium.Publisher/Instancium.Publisher.csproj" />
   <Project Path="tests/Instancium.Publisher.Tests/Instancium.Publisher.Tests.csproj" />

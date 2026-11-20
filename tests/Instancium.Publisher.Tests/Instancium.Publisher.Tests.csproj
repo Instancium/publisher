@@ -16,6 +16,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Instancium.Publisher.Domain\Instancium.Publisher.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Instancium.Publisher.Application\Instancium.Publisher.Application.csproj" />
+    <ProjectReference Include="..\..\src\Instancium.Publisher.Infrastructure\Instancium.Publisher.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Instancium.Publisher\Instancium.Publisher.csproj" />
   </ItemGroup>
 </Project>
