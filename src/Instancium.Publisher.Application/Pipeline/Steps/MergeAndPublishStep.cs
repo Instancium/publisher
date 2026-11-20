@@ -10,17 +10,20 @@ public class MergeAndPublishStep
     private readonly IGitService _gitService;
     private readonly IProcessExecutionService _processService;
     private readonly IProgressReporter _progressReporter;
+    private readonly IReleasePublisher _releasePublisher;
     private readonly ProjectContext _projectContext;
 
     public MergeAndPublishStep(
         IGitService gitService,
         IProcessExecutionService processService,
         IProgressReporter progressReporter,
+        IReleasePublisher releasePublisher,
         ProjectContext projectContext)
     {
         _gitService = gitService;
         _processService = processService;
         _progressReporter = progressReporter;
+        _releasePublisher = releasePublisher;
         _projectContext = projectContext;
     }
 
@@ -133,58 +136,12 @@ public class MergeAndPublishStep
             await _gitService.PushBranchAsync(context.SourceBranch, force: false, ct);
         }
 
-        await CreateGitHubReleaseAsync(versionTag, context.ReleaseNotes, context.NewVersion.IsPreRelease, ct);
-    }
-
-    private async Task CreateGitHubReleaseAsync(string tag, string releaseNotes, bool isPreRelease, CancellationToken ct)
-    {
-        string notes = string.IsNullOrWhiteSpace(releaseNotes) ? $"Automated release {tag} via Instancium.Publisher" : releaseNotes;
-        string tempFilePath = Path.GetTempFileName();
-
-        try
-        {
-            await File.WriteAllTextAsync(tempFilePath, notes, ct);
-            string preReleaseFlag = isPreRelease ? " --prerelease" : string.Empty;
-            string arguments = $"release create {tag} -t \"Release {tag}\" -F \"{tempFilePath}\"{preReleaseFlag}";
-
-            var ghOutputBuilder = new StringBuilder();
-            int ghExitCode = await _processService.ExecuteAsync(
-                "gh",
-                arguments,
-                _projectContext.WorkingDirectory,
-                onStdOut: msg => ghOutputBuilder.AppendLine(msg),
-                onStdErr: msg => ghOutputBuilder.AppendLine(msg),
-                ct: ct);
-
-            if (ghExitCode != 0)
-            {
-                await HandleGitHubCliFailureAsync(tag, notes, ghOutputBuilder.ToString(), ct);
-            }
-        }
-        catch (Exception ex)
-        {
-            await HandleGitHubCliFailureAsync(tag, notes, ex.Message, ct);
-        }
-        finally
-        {
-            if (File.Exists(tempFilePath))
-            {
-                File.Delete(tempFilePath);
-            }
-        }
-    }
-
-    private async Task HandleGitHubCliFailureAsync(string tag, string releaseNotes, string errorReason, CancellationToken ct)
-    {
-        string tempDirectory = Path.Combine(Path.GetTempPath(), "Instancium.Publisher");
-        Directory.CreateDirectory(tempDirectory);
-
-        string fallbackPath = Path.Combine(tempDirectory, $"RELEASE_NOTES_{tag}.md");
-        await File.WriteAllTextAsync(fallbackPath, releaseNotes, ct);
-
-        await _progressReporter.ReportWarningAsync(
-            $"GitHub CLI ('gh') is unavailable or unauthenticated (Exit details: {errorReason.Trim()}).", ct);
-        await _progressReporter.ReportWarningAsync(
-            $"Release notes exported to '{fallbackPath}'. Tag {tag} was pushed successfully.", ct);
+        await _releasePublisher.PublishAsync(
+            new ReleasePublicationRequest(
+                versionTag,
+                $"Release {versionTag}",
+                context.ReleaseNotes,
+                context.NewVersion.IsPreRelease),
+            ct);
     }
 }

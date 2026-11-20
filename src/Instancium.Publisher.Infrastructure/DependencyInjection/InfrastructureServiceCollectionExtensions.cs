@@ -2,6 +2,7 @@ using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Infrastructure.Ai;
 using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Infrastructure.Git;
+using Instancium.Publisher.Infrastructure.GitHub;
 using Instancium.Publisher.Infrastructure.Runtime;
 using Instancium.Publisher.Infrastructure.State;
 using Instancium.Publisher.Infrastructure.Versioning;
@@ -52,6 +53,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IDiffPayloadOptimizer, RegexDiffPayloadOptimizer>();
         services.AddSingleton<IAiCommitAssistant, SdkAiCommitAssistant>();
         services.AddSingleton<IProjectDiscoveryService, RepositoryProjectScanner>();
+        services.AddSingleton<IReleasePublisher, GitHubCliReleasePublisher>();
 
         return services;
     }
