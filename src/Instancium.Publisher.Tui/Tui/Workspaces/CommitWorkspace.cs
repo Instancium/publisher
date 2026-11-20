@@ -1,7 +1,7 @@
 ﻿namespace Instancium.Publisher.Tui.Workspaces;
 
 using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Tui.Abstractions;
 using Instancium.Publisher.Application.Pipeline;
 using Spectre.Console;
 using System;

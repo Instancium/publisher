@@ -1,7 +1,7 @@
 ﻿using Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Application.Pipeline.Steps;
 using Instancium.Publisher.Application.State;
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Tui.Abstractions;
 using Instancium.Publisher.Infrastructure.DependencyInjection;
 using Instancium.Publisher.Tui;
 using Instancium.Publisher.Tui.Workspaces;
@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Instancium.Publisher;
+namespace Instancium.Publisher.Tui;
 
 internal static class Program
 {

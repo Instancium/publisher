@@ -2,7 +2,7 @@
 
 using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Tui.Abstractions;
 using Instancium.Publisher.Application.State;
 using Instancium.Publisher.Tui.Components;
 using Microsoft.Extensions.Options;
