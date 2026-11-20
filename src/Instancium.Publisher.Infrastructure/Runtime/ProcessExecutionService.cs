@@ -1,4 +1,4 @@
-﻿namespace Instancium.Publisher.Services.Runtime;
+﻿namespace Instancium.Publisher.Infrastructure.Runtime;
 
 
 using Instancium.Publisher.Application.Abstractions;
