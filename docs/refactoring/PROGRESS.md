@@ -13,7 +13,7 @@ Baseline: 81 tests passing, commit a4e97b9, date 2026-04-06
 - [x] Phase 3: Extract Infrastructure (commits `fd64818`..`HEAD`; 81 tests passing)
 - [x] Phase 4: Finalize TUI host (commits `d3385f6`..`ca536d9`; 81 tests passing)
 - [x] Phase 5: Extension seams (commits `1bfbf92`..`HEAD`; 81 tests passing)
-- [ ] Phase 6: Extract workflows from TUI
+- [x] Phase 6: Extract workflows from TUI (commits `0e4b781`, `HEAD`; 81 tests passing)
 - [ ] Phase 7: Hardening
 - [ ] Phase 8: Documentation and release
 
