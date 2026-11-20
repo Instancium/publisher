@@ -1,6 +1,6 @@
 ﻿namespace Instancium.Publisher.Tui;
 
-using Instancium.Publisher.Core.Interfaces;
+using Instancium.Publisher.Application.Abstractions;
 using Spectre.Console;
 using System;
 using System.Text.RegularExpressions;

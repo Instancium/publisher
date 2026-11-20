@@ -2,7 +2,6 @@
 
 using Instancium.Publisher.Configuration;
 using Instancium.Publisher.Application.Abstractions;
-using Instancium.Publisher.Core.Interfaces;
 using InstantAIGate.Client.Chat;
 using InstantAIGate.Client.Configuration;
 using InstantAIGate.Client.Telemetry;
