@@ -20,6 +20,7 @@ internal static class Program
             {
                 config.SetBasePath(AppContext.BaseDirectory);
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                config.AddUserSecrets(typeof(Program).Assembly, optional: true);
             })
             .ConfigureLogging((context, logging) =>
             {
