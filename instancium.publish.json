@@ -1,0 +1,24 @@
+{
+  "product": "Instancium.Publisher",
+  "targets": [
+    {
+      "name": "win-x64",
+      "command": "dotnet",
+      "arguments": [
+        "publish",
+        "src/Instancium.Publisher.Tui/Instancium.Publisher.Tui.csproj",
+        "-c",
+        "Release",
+        "-r",
+        "win-x64",
+        "--self-contained",
+        "true",
+        "-p:Version={version}",
+        "-o",
+        "{stageDir}"
+      ],
+      "workingDirectory": ".",
+      "archiveName": "instancium-publisher-{version}-win-x64.zip"
+    }
+  ]
+}
