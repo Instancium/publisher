@@ -3,84 +3,55 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache2.0-blue.svg)](LICENSE.txt)
 [![.NET 10.0](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 [![Client for InstantAIGate](https://img.shields.io/badge/Client%20for-InstantAIGate-007acc.svg)](https://github.com/Instancium/instant-ai-gate)
+[![Signed with Instancium.Trust](https://img.shields.io/badge/Signed%20with-Instancium.Trust-2ea44f.svg)](https://github.com/Instancium/trust)
 
-**Autonomous TUI tool for .NET release automation with AI-powered commit messages and changelogs.**
+**Local-first TUI release orchestrator with AI-powered commits/changelogs, declarative multi-ecosystem artifact packaging, and cryptographic release signing.**
 
-Instancium Publisher eliminates the friction between writing code and shipping releases. It orchestrates Git workflows, repository-wide semantic versioning, and GitHub publishing — all backed by real-time local LLM inference through [InstantAIGate](https://github.com/Instancium/instant-ai-gate).
+Instancium Publisher eliminates the friction between writing code and shipping verifiable releases. It orchestrates Git workflows, repository-wide semantic versioning, declarative artifact builds, Ed25519 manifest signing via [Instancium.Trust](https://github.com/Instancium/trust), and GitHub Releases — backed by local LLM inference through [InstantAIGate](https://github.com/Instancium/instant-ai-gate).
 
 ## What It Does
 
-> Instancium Publisher replaces fragile, black-box server-side release scripts with a robust **Local-First Orchestration** model. By shifting AI generation and workflow validation directly to the developer's workstation, it guarantees human-in-the-loop oversight before a single remote ref is altered.
+> Instancium Publisher replaces fragile, black-box server-side release scripts with a **Local-First Orchestration** model. Shifting AI generation, artifact signing, and workflow validation to the developer workstation guarantees human-in-the-loop oversight and keeps signing keys off remote CI runners.
 
-- **Shift-Left AI Validation:** Optimizes and cleanses raw Git diffs directly on the source machine, preventing "garbage-in, garbage-out" scenarios before payloads ever reach the LLM gateway.
-- **Prevents Upstream Desyncs:** Version bumps and tags are created locally on top of your actual working state. The pipeline pulls the target branch before merging and retries transient push failures — no detached-HEAD surprises caused by remote runners pushing back into your repo.
-- **Interactive AI Commit Generation:** Streams LLM tokens in real-time **at the exact moment you prepare a commit**. Your explicit approval is required before the AI-generated Conventional Commit message is written to your local Git history.
-- **Noise-Filtered Changelogs:** Analyzes local commit logs, automatically stripping version bumps, merge commits, and backport chores to compile clean, human-readable release notes.
-- **Deterministic SemVer 2.0 Management:** Full lifecycle version bumping (stable, pre-release, and custom strategies) with deep validation of XML project manifests across the entire repository.
-- **Stateful Git Recovery:** Operates as a local transactional state machine. If a network drop or API error interrupts a multi-branch release, the tool safely resumes from the last checkpoint or executes an explicit rollback.
-
-## Why Use It
-
-### The Problem with Server-Side Release Automation
-
-Entrusting AI generation and multi-branch Git orchestration to remote CI/CD runners introduces significant operational hurdles:
-
-- **Blind AI Commits:** Server-side LLM steps often produce out-of-context commit messages that bypass human review until they hit the main branch.
-- **Brittle Bash Orchestration:** CI pipelines rely on long, unmaintainable shell scripts that lack proper state management, turning mid-release failures into manual cleanup nightmares.
-- **Distributed State Conflicts:** When a server-side runner bumps versions and pushes tags back to the repository, it frequently breaks local developer working trees due to branch desynchronization.
-- **Context Window Dilution:** Pushing raw, unoptimized diffs (including lockfiles and minified assets) to AI endpoints inflates token costs and degrades LLM output quality.
-- **Version Bumping is a Chore:** Synchronizing versions across multiple `.csproj` files relies on tedious manual updates, error-prone find-and-replace, or over-engineered build scripts.
-
-### The Solution: Local-First Control
-
-1. **Stage & Optimize** → The tool slices noise out of your diff (`-w`, `-U0`, hunk truncation, generated-file skipping) and feeds a clean payload to the local AI client.
-2. **Review In-Flight** → You validate and approve the AI-generated Conventional Commit message *before* it gets baked into Git history.
-3. **Transactional Bump & Prep** → The state machine journals a checkpoint, creates a `release-prep/v{version}` branch, and stamps the new version into every project manifest deterministically.
-4. **Isolated Release Execution** → Merging, tagging, backporting, and GitHub Release creation happen as a sequence of local operations with retry support.
-5. **Fail-Safe Recovery** → If a step fails, your environment isn't corrupted. **Resume** precisely where you left off, or trigger an explicit **Rollback**.
-
-All heavy lifting stays on your machine: an internal versioning engine plus an ephemeral connection to a local InstantAIGate instance — serverless, deterministic automation right in your terminal.
+- **Shift-Left AI Validation:** Sanitizes and optimizes raw Git diffs locally before payloads reach the LLM gateway, avoiding context dilution and inaccurate summaries.
+- **Interactive AI Commit Generation:** Streams Conventional Commit messages in real time and requires explicit approval before writing to Git history. Preserves partial staging when files are already indexed.
+- **Noise-Filtered Changelogs:** Reads structured Git commit records (`--no-merges`, subject, body, compact stat) and atomically drops release-engineering noise (version bumps, merges, backports) before generating release notes.
+- **Deterministic SemVer 2.0 Management:** Resolves the repository version across all discovered project manifests and aligns every project to the target version on release.
+- **Declarative Artifact Building & Cryptographic Signing:** Reads `instancium.publish.json` from the target repository, executes ecosystem build commands (`.NET`, `Node`, `Rust`, `Python`), packages binaries and external runtime drivers into `.zip` archives with SHA-256 hashes, and signs `manifest.json` + `manifest.sig` using a local `Instancium.Trust` Release Key container.
+- **Stateful Git Recovery:** Journals every release phase outside the Git working tree (`%TEMP%/Instancium.Publisher/`). Interrupted releases can be resumed without re-bumping versions or rolled back cleanly.
 
 ## Key Features
 
 ### Zero-Toil Repository Versioning
 
-Version management across multi-project .NET solutions is painful and error-prone. Publisher discovers every `.csproj` under the repository root (skipping `bin`, `obj`, `.git`, `.vs`, `node_modules`, and hidden directories), resolves the repository version as the **highest declared SemVer** among projects, and aligns **every** project to the new version on release — including projects that never declared a version. No brittle MSBuild scripts, no regex hacks.
-
-### Interactive TUI Navigation
-
-Hierarchical Spectre.Console interface for switching between registered repositories and workspaces. Active branch, pending changes, unpushed commits, and project context at a glance.
-
-### InstantAIGate Integration
-
-Built on the official `InstantAIGate.Client` SDK (SignalR, `/hub/gateway`). Streams inference tokens for commit messages and changelogs, with automatic reconnect and SDK-managed KV-cache checkpointed Map-Reduce for diffs and logs that exceed the model context window.
-
-### Rename-Aware, Status-Accurate AI Payloads
-
-Diffs are collected with rename detection (`-M`) and per-file status extraction (`ADDED` / `MODIFIED` / `DELETED` / `RENAMED`). Prompt construction enforces status accuracy: a modified file is never described as "newly added" in generated messages.
+Discovers project manifests under the repository root via `IProjectEcosystem` (MSBuild `*.csproj` out of the box; skipping `bin`, `obj`, `.git`, `.vs`, `node_modules`, and hidden directories). Resolves the current repository version as the **highest declared SemVer** and aligns every project to the new version on release — including projects without a prior `<Version>` element.
 
 ### Deterministic SemVer 2.0 Engine
 
-Full lifecycle version management:
+Built on pluggable `IVersionBumpStrategy` components:
 
-- Stable bumps: `1.0.0` → `1.0.1` (Patch), `1.1.0` (Minor), `2.0.0` (Major)
-- Pre-release progression: `1.0.0` → `1.0.1-rc.1` → `1.0.1-rc.2` → `1.0.1`
-- Pre-release Patch / Minor / Major starts, iteration bumps, promotion to stable
-- Custom version strings for edge cases (strict SemVer 2.0 validation)
+- Stable bumps: `Patch`, `Minor`, `Major`
+- Pre-release progression: `Pre-Release Iteration`, `Pre-Release Patch`, `Pre-Release Minor`, `Pre-Release Major`, `Promote To Release`
+- Explicit `Custom` SemVer 2.0 input with strict validation
 
-### Transactional Execution & Safe Rollbacks
+### Declarative Build, Packaging & Zero-Trust Signing
 
-Release state is journaled to `%TEMP%/Instancium.Publisher/` (one state file per repository, outside your Git tree). Interrupted releases can be resumed, rolled back, or restarted from scratch.
+When a target repository contains `instancium.publish.json`, the release pipeline automatically:
 
-### Network Resilience
+1. Runs configured build targets (with `{version}`, `{stageDir}`, `{outputDir}`, and `{repoRoot}` token expansion) into an isolated staging directory under `%TEMP%/Instancium.Publisher/staging/`.
+2. Packages target outputs and external assets (such as Vulkan or `llama.cpp` runtime drivers) into `.zip` archives and computes streaming SHA-256 digests.
+3. Unlocks the local Argon2id + AES-256-GCM Release Key container via `Instancium.Trust`, validates `release-key.cert` expiration, emits `manifest.json` and detached `manifest.sig`, and wipes private key bytes from memory in `finally`.
+4. Uploads all staged archives, `manifest.json`, and `manifest.sig` to the GitHub Release via `gh release create`.
 
-Remote Git operations retry up to 4 attempts with exponential backoff on transient errors (HTTP 5xx, RPC failures, connection resets). Hung processes are terminated by a 30-second idle timeout, and stale `.git/index.lock` files are cleaned up automatically before retrying.
+Repositories without `instancium.publish.json` skip the build/sign phase cleanly without prompting for a signing password.
 
-### AI Changelog Sanitization & Payload Optimization
+### InstantAIGate Integration
 
-- **Diff payload optimization:** strips verbose Git headers, ignores whitespace, limits context lines, truncates massive hunks, and skips generated/binary payloads (lockfiles, `.min.js`, images, binaries).
-- **Commit log sanitization:** ignores version bump commits, backport operations, and release merge chores.
-- **Output cleanup:** strips stray Markdown fences from release notes and appends a signature footer with the tool version and the actual active model id reported by the gateway.
+Built on the official `InstantAIGate.Client` SDK (SignalR `/hub/gateway`). Streams inference tokens for commit messages and changelogs, with automatic reconnect and SDK-managed KV-cache checkpointed Map-Reduce for oversized diffs and commit logs.
+
+### Network Resilience & Process Safety
+
+Remote Git operations retry up to 4 times with exponential backoff on transient failures (HTTP 5xx, RPC errors, connection resets). Hung child processes are terminated by a 30-second idle timeout, and stale `.git/index.lock` files are cleaned up before retrying.
 
 ## Installation
 
@@ -89,199 +60,168 @@ Remote Git operations retry up to 4 attempts with exponential backoff on transie
 - [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Git 2.30+ in `PATH`
 - A running [InstantAIGate](https://github.com/Instancium/instant-ai-gate) instance with `/hub/gateway` accessible
-- GitHub CLI (`gh`) authenticated in `PATH` — **optional**. Without it, tags are still pushed and release notes are exported to a local file (see below)
+- GitHub CLI (`gh`) authenticated in `PATH` — **optional**. Without it, tags and branches are still pushed and release notes are exported locally
 
-### Build from Source
+### Build & Test
 
 ```bash
-git clone https://github.com/Instancium/Publisher.git
+git clone [https://github.com/Instancium/Publisher.git](https://github.com/Instancium/Publisher.git)
 cd Publisher
 dotnet build Instancium.Publisher.slnx -c Release
+dotnet test Instancium.Publisher.slnx -c Release
 ```
 
-### Run Tests
+## Configuration
 
-```bash
-dotnet test tests/Instancium.Publisher.Tests/Instancium.Publisher.Tests.csproj -c Release
-```
-
-## ⚙️ Configuration
-
-Publisher loads `appsettings.json` from the **executable's directory** (the file is required). When building from source, edit `src/Instancium.Publisher/appsettings.json` — it is copied to the output directory on build.
+Publisher loads `appsettings.json` from the **executable directory**. When building from source, edit `src/Instancium.Publisher.Tui/appsettings.json` (copied to output on build).
 
 ```json
 {
   "PublisherSettings": {
+    "TargetBranch": "main",
+    "ReleaseBranchPrefix": "release-prep/v",
     "AiGatewayUrl": "http://localhost:5000",
-    "AiModelId": "qwen3-vl-8b-instruct",
+    "AiModelId": "qwen3-4b-instruct",
     "AiApiKey": "",
-    "MaxChunkLength": 3000,
+    "MaxChunkLength": 10000,
     "DiffOptimization": {
       "Enabled": true,
-      "ContextLines": 0,
+      "ContextLines": 3,
       "IgnoreWhitespace": true,
       "MaxHunkLines": 80
     },
+    "Signing": {
+      "ReleaseKeyContainerPath": "",
+      "ReleaseCertificatePath": "",
+      "ReleaseKeyId": "",
+      "PasswordEnvironmentVariable": "INSTANCIUM_RELEASE_KEY_PASSWORD"
+    },
     "RegisteredProjects": {
-      "MyAwesomeApp": "C:\\path\\to\\MyAwesomeApp",
-      "AnotherRepo": "D:\\repos\\another-repo"
+      "MyAwesomeApp": "C:\\path\\to\\MyAwesomeApp"
     }
   }
 }
 ```
 
-**Keep secrets out of source control.** Any setting can be overridden via environment variables using the `Section__Property` convention:
+**Keep secrets out of source control.** Override secrets via environment variables:
 
 ```powershell
 # Windows (PowerShell)
 $env:PublisherSettings__AiApiKey = "your-instantaigate-access-token"
+$env:INSTANCIUM_RELEASE_KEY_PASSWORD = "your-release-key-container-password"
 ```
 
 ```bash
 # Linux / macOS
 export PublisherSettings__AiApiKey="your-instantaigate-access-token"
+export INSTANCIUM_RELEASE_KEY_PASSWORD="your-release-key-container-password"
 ```
+
+If `INSTANCIUM_RELEASE_KEY_PASSWORD` is not set, Publisher falls back to a masked interactive terminal prompt when signing is required.
 
 ### Configuration Options
 
 | Setting | Default | Description |
-| --- | --- | --- |
-| `AiGatewayUrl` | `http://localhost:5000` | InstantAIGate server URL |
-| `AiModelId` | `qwen3-vl-8b-instruct` | Model identifier on the gateway (display fallback; the footer uses the actual active model reported by telemetry) |
+| :--- | :--- | :--- |
+| `TargetBranch` | `main` | Branch into which release branches are merged and tagged |
+| `ReleaseBranchPrefix` | `release-prep/v` | Prefix for temporary release preparation branches |
+| `AiGatewayUrl` | `http://localhost:5000` | InstantAIGate server base URL |
+| `AiModelId` | `qwen3-vl-8b-instruct` | Target model id on the gateway (also display fallback when telemetry is unavailable) |
 | `AiApiKey` | `""` | Bearer token for SignalR authentication |
-| `MaxChunkLength` | `3000` | Upper bound (characters) for a single AI payload chunk. Effective limit = min(this value, model-context-derived budget, 15000-char transport cap) |
-| `DiffOptimization.Enabled` | `true` | Enables Git diff payload sanitization |
-| `DiffOptimization.ContextLines` | `0` | Context lines in Git diff (`-U0`) |
-| `DiffOptimization.IgnoreWhitespace` | `true` | Ignores whitespace changes (`-w --ignore-blank-lines`) |
-| `DiffOptimization.MaxHunkLines` | `80` | Maximum continuous hunk lines before truncation |
-| `RegisteredProjects` | `{}` | Dictionary of display name → repository root directory. A path to a `.csproj` file is also accepted (its directory is used). The name `Exit` is reserved by the navigation menu |
-| `TargetBranch` | `main` | **Reserved.** Present in the schema but not yet enforced: the current pipeline always merges into `main` |
-| `ReleaseBranchPrefix` | `release-prep/v` | **Reserved.** The current pipeline always uses `release-prep/v` |
-| `AllowedBranchPrefixes` | `dev, feat/, fix/, hotfix/, rc/, rfc/` | **Reserved.** Branch policy enforcement is not yet implemented |
+| `MaxChunkLength` | `3000` | Upper bound (characters) per AI payload chunk. Effective limit = `min(MaxChunkLength, modelContextBudget, 15000)` |
+| `DiffOptimization.Enabled` | `true` | Enables Git diff header stripping, hunk truncation, and pathspec exclusions |
+| `DiffOptimization.ContextLines` | `3` | Unified diff context lines (`-U{n}`) |
+| `DiffOptimization.IgnoreWhitespace` | `true` | Passes `-w --ignore-blank-lines` to `git diff` |
+| `DiffOptimization.MaxHunkLines` | `80` | Maximum lines per diff hunk before truncation |
+| `Signing.ReleaseKeyContainerPath` | `""` | Path to encrypted `release-key.key.json` container |
+| `Signing.ReleaseCertificatePath` | `""` | Path to signed `release-key.cert` envelope (preferred; validates expiry and extracts `kid`) |
+| `Signing.ReleaseKeyId` | `""` | Fallback `kid` when `ReleaseCertificatePath` is not configured |
+| `Signing.PasswordEnvironmentVariable` | `INSTANCIUM_RELEASE_KEY_PASSWORD` | Environment variable checked before prompting interactively for the container password |
+| `RegisteredProjects` | `{}` | Map of display name to repository root directory (or `.csproj` path). `Exit` is reserved |
+
+### Declarative Release Manifest (`instancium.publish.json`)
+
+Place `instancium.publish.json` at the root of a target repository to enable automated artifact building, packaging, and signing:
+
+```json
+{
+  "product": "Instancium.Vectra",
+  "targets": [
+    {
+      "name": "win-x64",
+      "command": "dotnet",
+      "arguments": ["publish", "src/App/App.csproj", "-c", "Release", "-r", "win-x64", "--self-contained", "-o", "{stageDir}"],
+      "archiveName": "vectra-{version}-win-x64.zip"
+    }
+  ],
+  "externalAssets": [
+    {
+      "sourcePath": "drivers/vulkan",
+      "archiveName": "vulkan-runtime-{version}.zip"
+    }
+  ]
+}
+```
 
 ## Usage
 
-Instancium Publisher is an **interactive TUI application** — no CLI subcommands.
-
 ```bash
-# Launch the interactive dashboard
-dotnet run --project src/Instancium.Publisher/Instancium.Publisher.csproj -c Release
+# Launch the interactive TUI
+dotnet run --project src/Instancium.Publisher.Tui/Instancium.Publisher.Tui.csproj -c Release
 
 # Or run the compiled binary
-./src/Instancium.Publisher/bin/Release/net10.0/Instancium.Publisher      # Linux/macOS
-.\src\Instancium.Publisher\bin\Release\net10.0\Instancium.Publisher.exe  # Windows
+./src/Instancium.Publisher.Tui/bin/Release/net10.0/Instancium.Publisher      # Linux/macOS
+.\src\Instancium.Publisher.Tui\bin\Release\net10.0\Instancium.Publisher.exe  # Windows
 ```
-
-### Workflow
-
-1. **Select Target Repository** — choose from `RegisteredProjects`
-2. **View Dashboard** — active branch, pending changes, unpushed commits, target path
-3. **Select Workspace**:
-   - **Commit Control Center** — stage files, generate an AI commit message, push to remote
-   - **Release Master & Recovery** — end-to-end release pipeline with rollback capability
 
 ### Commit Control Center
 
-1. Stages **all** changes (`git add -A`) — commit or stash unrelated work first
-2. Analyzes the cached diff, applies sanitization rules, and streams it to the AI
-3. Streams the generated Conventional Commit message in real-time
-4. You approve or abort (abort keeps files staged)
-5. Commits locally, then pushes with an interactive retry loop — a failed push never loses your local commit
-6. If the tree is clean but unpushed commits exist, offers a push-only path
+1. Checks the Git index first; if nothing is staged, runs `git add -A`.
+2. Optimizes the cached diff and streams a Conventional Commit message from InstantAIGate.
+3. Prompts for approval or abort (abort keeps files staged).
+4. Sanitizes the message, commits locally, and pushes with an interactive retry loop.
+5. If the working tree is clean but unpushed commits exist, offers a push-only path.
 
 ### Release Master & Recovery
 
-1. Discovers all `.csproj` files under the repository root and reads declared versions; the repository version is the highest declared one
-2. You select a version bump strategy (with a live `current → next` preview)
-3. Creates/checks out the release branch `release-prep/v{version}` (an existing branch is reused)
-4. Journals a checkpoint, then stamps the new version into **every** project file
-5. Generates the AI changelog from commit history: stable releases aggregate across pre-release tags; pre-releases cover only the delta since the previous tag; repositories without tags fall back to the last 20 commits
-6. You approve, abort (state kept), or roll back
-7. Any pending changes are auto-committed as `chore(release): prepare version v{version}`; the release branch is merged into `main`, an annotated tag `v{version}` is created and pushed
-8. Backports the release to the source branch if it differs from `main` (fast-forward first, forced merge as fallback) and pushes it
-9. Creates the GitHub Release via `gh` (with `--prerelease` for pre-release versions)
-10. Returns to the source branch, deletes the release branch locally and remotely, and clears the state journal
+1. **Step 1 — Inspect & Bump:** Discovers project manifests, prompts for a bump strategy with `current -> next` preview, checks out `{ReleaseBranchPrefix}{version}`, journals the plan, and writes the new version to all projects.
+2. **Step 2 — AI Changelog:** Collects structured commit history (`--merged HEAD` tag resolution; stable releases aggregate across pre-release tags), streams release notes, appends the tool/model signature footer, and prompts for approval.
+3. **Step 3 — Build & Sign:** If `instancium.publish.json` is present, builds targets, packages archives/drivers into temp staging, generates `manifest.json` + `manifest.sig` via `Instancium.Trust`, and journals asset paths.
+4. **Step 4 — Merge & Publish:** Commits pending version updates (`chore(release): prepare version v{version}`), pulls `TargetBranch`, merges (fast-forward first, forced fallback on divergence), tags and pushes `v{version}`, backports to the source branch if different, publishes the GitHub Release with all signed assets via `gh`, cleans up the release branch, and clears the pipeline journal.
 
-**GitHub CLI fallback:** if `gh` is unavailable or unauthenticated, the tag and branches are already pushed — the tool exports the release notes to `%TEMP%/Instancium.Publisher/RELEASE_NOTES_{tag}.md` and warns, so you can create the release manually without losing anything.
-
-**Recovery:** state is checkpointed to disk before every mutating phase. On restart after a crash you can:
-
-- **Resume** — continue from the last checkpoint (the planned version is never re-bumped)
-- **Rollback** — explicit destructive reset (see Safety)
-- **Start Fresh** — roll back and begin a new release
-
-## Safety & Validation
-
-- **Human-in-the-Loop Gates:** Nothing is committed, merged, tagged, or published without your explicit approval at the corresponding prompt.
-- **Pending Changes Handling:** Uncommitted changes present at publish time are auto-committed as `chore(release): prepare version v{version}` on the release branch — review your working tree before starting a release.
-- **State Persistence:** Interrupted releases can be resumed or rolled back; the journal lives outside your Git tree, per repository.
-- **Stateless AI Sessions:** Each inference request runs in a stateless chat session; no conversation state persists on the gateway, and KV-cache resources are released on disconnect.
-- **Destructive Rollback:** Requires explicit menu selection. Restores the working tree (`git reset --hard` + `git clean -fd`), returns to the source branch, deletes the release branch locally and remotely, and clears the state journal.
-- **Deterministic Merge Strategy:** During release and backport operations, conflicts are resolved in favor of the incoming release branch. The exact versions and file states prepared by the pipeline are enforced without manual intervention, while preserving the Git merge history graph.
-- **Hung Process Protection:** A 30-second idle timeout terminates stalled Git/network processes, cleans stale `index.lock` files, and retries with backoff.
+**GitHub CLI fallback:** If `gh` is unavailable or unauthenticated, tags and branches remain pushed and release notes are exported to `%TEMP%/Instancium.Publisher/RELEASE_NOTES_{tag}.md`.
 
 ## Architecture Overview
 
-Instancium Publisher is **decoupled from inference runtimes**. It does not embed `llama.cpp` or model weight loaders. All AI tasks are delegated to InstantAIGate through the official `InstantAIGate.Client` SDK: the SDK owns transport, session lifecycle, reconnect, and checkpointed Map-Reduce recovery; Publisher owns diff optimization, chunking, prompt construction, and output sanitization.
+The solution follows a strict 4-layer Clean Architecture:
 
-```text
-┌───────────────────────────────────────┐          ┌────────────────────────────────────┐
-│          Instancium.Publisher         │          │        InstantAIGate.Server        │
-│      (Local release orchestration)    │          │      (Local LLM inference host)    │
-│                                       │          │                                    │
-│  TUI workspaces (Spectre.Console)     │          │  /hub/gateway  (SignalR hub)       │
-│  Version engine · Git service         │          │  Stateless chat sessions           │
-│  Pipeline state journal               │          │  KV-cache checkpointed Map-Reduce  │
-│  InstantAIGate.Client SDK             │          │  Model telemetry                   │
-└───────────────────┬───────────────────┘          └─────────────────┬──────────────────┘
-                    │                                                │
-                    │  1. Connect (Bearer token, auto-reconnect)     │
-                    ├───────────────────────────────────────────────>│
-                    │  2. StreamAsync(optimized diff / commit log)   │
-                    ├───────────────────────────────────────────────>│
-                    │  3. Token stream (real-time TUI rendering)     │
-                    │<─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
-                    │  4. Session disposed (stateless, KV released)  │
-                    ├───────────────────────────────────────────────>│
-```
+| Project | Target Frameworks | Responsibility |
+| :--- | :--- | :--- |
+| `Instancium.Publisher.Domain` | `net8.0;net10.0` | `SemanticVersion`, `RepositoryVersionPolicy`, `IVersionBumpStrategy` catalog, domain exceptions |
+| `Instancium.Publisher.Application` | `net8.0;net10.0` | Workflows (`CommitWorkflow`, `ReleaseWorkflow`, `ReleaseRecoveryService`), pipeline steps (`BumpVersionStep`, `BuildAndSignStep`, `MergeAndPublishStep`), ports (`Abstractions`) |
+| `Instancium.Publisher.Infrastructure` | `net10.0` | `GitService`, `SdkAiCommitAssistant`, `MsBuildProjectEcosystem`, `DeclarativeArtifactBuilder`, `LocalReleaseKeySigner` (`Instancium.Trust`), `GitHubCliReleasePublisher`, `PipelineStateManager` |
+| `Instancium.Publisher.Tui` | `net10.0` | Spectre.Console host, `MainTuiOrchestrator`, `CommitWorkspace`, `ReleaseWorkspace`, `TuiSecretProvider`, `TuiProgressReporter` |
 
-For oversized payloads, the chunk budget is resolved dynamically from the model's actual context size (via gateway telemetry), the configured `MaxChunkLength`, and a transport-safe ceiling — then processed through checkpointed Map-Reduce with live progress in the TUI.
-
-## .NET Ecosystem Focus
-
-**Important:** Instancium Publisher currently targets the .NET ecosystem exclusively.
-
-The versioning engine discovers and updates the `<Version>` element in SDK-style **`.csproj` files only**. `Directory.Build.props`, `Directory.Packages.props`, and non-XML manifests (e.g., `package.json` for Node.js) are **not** read or modified. Keep the authoritative `<Version>` in your project files.
+All build settings and NuGet package versions are declared explicitly in each `.csproj` without central `.props` files. `Instancium.Trust` is isolated to `Infrastructure` so `Domain` and `Application` remain multi-targeted (`net8.0;net10.0`).
 
 ## Roadmap
 
-Planned for the upcoming 1.x line (subject to change before 2.0.0):
+- **Document Signing Workspace:** Dedicated TUI workspace (`DocumentSigningWorkspace`) for signing standalone artifacts (such as `Instancium_Doctrine.pdf`) into `doctrine.manifest.json` + `doctrine.sig` with optional Git publication.
+- **Additional Project Ecosystems:** `IProjectEcosystem` implementations for Node (`package.json`), Rust (`Cargo.toml`), and Python (`pyproject.toml`).
+- **Optional Binary Code Signing:** Pluggable Authenticode signer for Windows executables alongside `Instancium.Trust` manifest signing.
 
-- Local build step: `dotnet publish -c Release --self-contained` artifacts per release
-- Artifact packaging: `.zip` archives with SHA-256 checksums
-- Release registry: `manifest.json` + Ed25519 signature (`manifest.sig`), Authenticode signing of executables — verified client-side by the Instancium installer (zero-trust distribution)
-- Layered core (Domain / Application / Infrastructure / UI) enabling additional front-ends (Visual Studio, MAUI) and pluggable bump strategies / project ecosystems
+## Versioning & Stability Policy
 
-## ⚠️ Versioning & Stability Policy
+Instancium Publisher follows Semantic Versioning (1.x pre-2.0 stabilization track):
 
-Instancium Publisher follows a pragmatic variant of Semantic Versioning.
+- **Major (`2.x.y`):** First stable 2.0.0 release and major architectural milestones.
+- **Minor (`x.Y.0`):** Configuration schema changes, new workspaces, or external integration updates.
+- **Patch (`x.y.Z`):** Backward-compatible bug fixes.
 
-### Pre-2.0 Status
+## License
 
-Until version 2.0.0 is released, the tool is on a stabilization track (1.x line) while the product ecosystem reaches its goals. Public CLI behavior and configuration schemas are not strictly frozen.
+Licensed under the Apache License 2.0 — see [LICENSE.txt](LICENSE.txt).
 
-### Version Components
-
-| Segment | Meaning |
-| :--- | :--- |
-| **Major** (2.x.y) | Reserved for the first stable release (2.0.0). Subsequent major updates reflect fundamental architectural shifts or major roadmap milestones. |
-| **Minor** (x.Y.0) | Incremented when configuration schemas (e.g., `appsettings.json`), launch strategies, or external integrations change. Review the release notes before upgrading. |
-| **Patch** (x.y.Z) | Bug fixes that do not alter integration rules. Existing configurations remain safe to use. |
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0 — see the [LICENSE.txt](LICENSE.txt) file for details.
-
-## 📞 Support
+## Support
 
 For issues, feature requests, or questions, please [open an issue](https://github.com/Instancium/Publisher/issues).
