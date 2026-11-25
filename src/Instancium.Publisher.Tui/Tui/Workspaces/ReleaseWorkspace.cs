@@ -189,10 +189,10 @@ public sealed class ReleaseWorkspace(
 
             if (activeContext.CurrentStep <= 3)
             {
-                IReadOnlyList<string> assets = [];
-                await TuiProgressReporter.RunWithLiveStatusAsync(
-                    "Building and signing release artifacts...",
-                    async () => { assets = await _workflow.BuildAndSignArtifactsAsync(activeContext, _projectContext.Name, ct); },
+                AnsiConsole.MarkupLine("\n[cyan]Building and signing release artifacts...[/]");
+                IReadOnlyList<string> assets = await _workflow.BuildAndSignArtifactsAsync(
+                    activeContext,
+                    _projectContext.Name,
                     ct);
 
                 if (assets.Count > 0)
