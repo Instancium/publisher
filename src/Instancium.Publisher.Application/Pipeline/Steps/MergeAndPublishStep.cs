@@ -93,7 +93,8 @@ public class MergeAndPublishStep
                 versionTag,
                 $"Release {versionTag}",
                 context.ReleaseNotes,
-                context.NewVersion.IsPreRelease),
+                context.NewVersion.IsPreRelease,
+                context.ReleaseAssetPaths),
             ct);
     }
 

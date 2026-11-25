@@ -28,6 +28,15 @@ public sealed class GitHubCliReleasePublisher : IReleasePublisher
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        IReadOnlyList<string> assetPaths = request.AssetPaths ?? [];
+        foreach (string assetPath in assetPaths)
+        {
+            if (!File.Exists(assetPath))
+            {
+                throw new FileNotFoundException($"Release asset not found prior to GitHub publication: '{assetPath}'.", assetPath);
+            }
+        }
+
         string notes = string.IsNullOrWhiteSpace(request.Notes)
             ? $"Automated release {request.TagName} via Instancium.Publisher"
             : request.Notes;
@@ -46,6 +55,8 @@ public sealed class GitHubCliReleasePublisher : IReleasePublisher
             {
                 arguments.Add("--prerelease");
             }
+
+            arguments.AddRange(assetPaths);
 
             var ghOutputBuilder = new StringBuilder();
             int ghExitCode = await _processService.ExecuteAsync(

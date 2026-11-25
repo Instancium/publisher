@@ -29,6 +29,7 @@ public sealed class ReleaseWorkflow
     private readonly IPipelineStateManager _stateManager;
     private readonly IGitService _gitService;
     private readonly BumpVersionStep _bumpStep;
+    private readonly BuildAndSignStep _buildAndSignStep;
     private readonly MergeAndPublishStep _publishStep;
     private readonly IAiCommitAssistant _aiAssistant;
     private readonly IProjectVersionService _versionService;
@@ -41,6 +42,7 @@ public sealed class ReleaseWorkflow
         IPipelineStateManager stateManager,
         IGitService gitService,
         BumpVersionStep bumpStep,
+        BuildAndSignStep buildAndSignStep,
         MergeAndPublishStep publishStep,
         IAiCommitAssistant aiAssistant,
         IProjectVersionService versionService,
@@ -52,6 +54,7 @@ public sealed class ReleaseWorkflow
         _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
         _gitService = gitService ?? throw new ArgumentNullException(nameof(gitService));
         _bumpStep = bumpStep ?? throw new ArgumentNullException(nameof(bumpStep));
+        _buildAndSignStep = buildAndSignStep ?? throw new ArgumentNullException(nameof(buildAndSignStep));
         _publishStep = publishStep ?? throw new ArgumentNullException(nameof(publishStep));
         _aiAssistant = aiAssistant ?? throw new ArgumentNullException(nameof(aiAssistant));
         _versionService = versionService ?? throw new ArgumentNullException(nameof(versionService));
@@ -167,6 +170,24 @@ public sealed class ReleaseWorkflow
         ArgumentNullException.ThrowIfNull(state);
         state.CurrentStep = 3;
         return _stateManager.SaveAsync(state);
+    }
+
+    /// <summary>
+    /// Builds and signs configured release artifacts before advancing the pipeline to final publication.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> BuildAndSignArtifactsAsync(
+        PipelineContext state,
+        string productName,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(productName);
+
+        string repositoryRoot = await _gitService.GetRepositoryRootAsync(ct);
+        IReadOnlyList<string> assetPaths = await _buildAndSignStep.ExecuteAsync(state, repositoryRoot, productName, ct);
+        state.CurrentStep = 4;
+        await _stateManager.SaveAsync(state);
+        return assetPaths;
     }
 
     public async Task PublishAsync(PipelineContext state, string targetBranch, CancellationToken ct = default)

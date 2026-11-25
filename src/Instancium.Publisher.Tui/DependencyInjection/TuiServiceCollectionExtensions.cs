@@ -17,6 +17,7 @@ public static class TuiServiceCollectionExtensions
             configuration.GetSection("PublisherSettings"));
 
         services.AddSingleton<IProgressReporter, TuiProgressReporter>();
+        services.AddSingleton<ISecretProvider, TuiSecretProvider>();
         services.AddTransient<ITuiWorkspace, CommitWorkspace>();
         services.AddTransient<ITuiWorkspace, ReleaseWorkspace>();
         services.AddSingleton<MainTuiOrchestrator>();

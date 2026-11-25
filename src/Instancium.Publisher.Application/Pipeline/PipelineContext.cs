@@ -11,4 +11,5 @@ public class PipelineContext
     public SemanticVersion? NewVersion { get; set; }
     public string CommitMessage { get; set; } = string.Empty;
     public string ReleaseNotes { get; set; } = string.Empty;
+    public List<string> ReleaseAssetPaths { get; set; } = [];
 }

@@ -15,4 +15,5 @@ public sealed class PublisherSettings
     public int MaxChunkLength { get; set; } = 3000;
 
     public DiffOptimizationSettings DiffOptimization { get; set; } = new();
+    public SigningSettings Signing { get; set; } = new();
 }

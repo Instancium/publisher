@@ -27,6 +27,7 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddSingleton<ProjectContext>();
         services.AddTransient<BumpVersionStep>();
+        services.AddTransient<BuildAndSignStep>();
         services.AddTransient<MergeAndPublishStep>();
         services.AddTransient<CommitWorkflow>();
         services.AddTransient<ReleaseWorkflow>();

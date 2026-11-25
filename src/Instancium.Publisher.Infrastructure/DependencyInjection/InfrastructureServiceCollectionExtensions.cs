@@ -3,13 +3,19 @@ using Instancium.Publisher.Infrastructure.Ai;
 using Instancium.Publisher.Infrastructure.Configuration;
 using Instancium.Publisher.Infrastructure.Git;
 using Instancium.Publisher.Infrastructure.GitHub;
+using Instancium.Publisher.Infrastructure.Publishing;
 using Instancium.Publisher.Infrastructure.Runtime;
+using Instancium.Publisher.Infrastructure.Signing;
 using Instancium.Publisher.Infrastructure.State;
 using Instancium.Publisher.Infrastructure.Versioning;
 using Instancium.Publisher.Infrastructure.Versioning.DotNet;
+using Instancium.Trust.Algorithms;
+using Instancium.Trust.Keys;
+using Instancium.Trust.Manifests;
 using InstantAIGate.Client.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Instancium.Publisher.Infrastructure.DependencyInjection;
 
@@ -54,6 +60,16 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IAiCommitAssistant, SdkAiCommitAssistant>();
         services.AddSingleton<IProjectDiscoveryService, RepositoryProjectScanner>();
         services.AddSingleton<IReleasePublisher, GitHubCliReleasePublisher>();
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<ISignatureAlgorithm, Ed25519SignatureAlgorithm>();
+        services.AddSingleton<SignatureAlgorithmRegistry>();
+        services.AddSingleton<KeyContainerProtector>();
+        services.AddSingleton<KeyContainerCodec>();
+        services.AddSingleton<ManifestSigner>();
+
+        services.AddSingleton<IArtifactBuilder, DeclarativeArtifactBuilder>();
+        services.AddSingleton<IArtifactSigner, LocalReleaseKeySigner>();
 
         return services;
     }

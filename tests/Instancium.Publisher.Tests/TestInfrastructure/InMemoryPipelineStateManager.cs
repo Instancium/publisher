@@ -34,7 +34,8 @@ public sealed class InMemoryPipelineStateManager : IPipelineStateManager
             CurrentVersion = context.CurrentVersion,
             NewVersion = context.NewVersion,
             CommitMessage = context.CommitMessage,
-            ReleaseNotes = context.ReleaseNotes
+            ReleaseNotes = context.ReleaseNotes,
+            ReleaseAssetPaths = [.. context.ReleaseAssetPaths]
         });
         return Task.CompletedTask;
     }

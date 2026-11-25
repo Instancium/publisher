@@ -189,6 +189,20 @@ public sealed class ReleaseWorkspace(
 
             if (activeContext.CurrentStep <= 3)
             {
+                IReadOnlyList<string> assets = [];
+                await TuiProgressReporter.RunWithLiveStatusAsync(
+                    "Building and signing release artifacts...",
+                    async () => { assets = await _workflow.BuildAndSignArtifactsAsync(activeContext, _projectContext.Name, ct); },
+                    ct);
+
+                if (assets.Count > 0)
+                {
+                    AnsiConsole.MarkupLine($"[green]Prepared and signed {assets.Count} release asset(s).[/]");
+                }
+            }
+
+            if (activeContext.CurrentStep <= 4)
+            {
                 await TuiProgressReporter.RunWithLiveStatusAsync(
                     "Merging and publishing release to GitHub...",
                     async () => await _workflow.PublishAsync(activeContext, _settings.TargetBranch, ct),
