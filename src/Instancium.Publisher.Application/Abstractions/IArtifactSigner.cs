@@ -3,13 +3,17 @@ namespace Instancium.Publisher.Application.Abstractions;
 using Instancium.Publisher.Domain.Versioning;
 
 /// <summary>
-/// Input parameters for generating and cryptographically signing a release manifest.
+/// Input parameters for generating and cryptographically signing a release or document manifest.
+/// Default file names preserve release pipeline compatibility while allowing standalone document bundles
+/// (e.g., doctrine.manifest.json / doctrine.sig).
 /// </summary>
 public sealed record ArtifactSignRequest(
     string ProductName,
     SemanticVersion Version,
     IReadOnlyList<BuiltArtifact> Artifacts,
-    string OutputDirectory);
+    string OutputDirectory,
+    string ManifestFileName = "manifest.json",
+    string SignatureFileName = "manifest.sig");
 
 /// <summary>
 /// Paths to the emitted release manifest and its detached signature file.

@@ -20,6 +20,7 @@ public static class TuiServiceCollectionExtensions
         services.AddSingleton<ISecretProvider, TuiSecretProvider>();
         services.AddTransient<ITuiWorkspace, CommitWorkspace>();
         services.AddTransient<ITuiWorkspace, ReleaseWorkspace>();
+        services.AddTransient<ITuiWorkspace, DocumentSigningWorkspace>();
         services.AddSingleton<MainTuiOrchestrator>();
 
         return services;

@@ -41,6 +41,9 @@ public sealed class LocalReleaseKeySigner : IArtifactSigner
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        string manifestFileName = ValidateOutputFileName(request.ManifestFileName, nameof(request.ManifestFileName));
+        string signatureFileName = ValidateOutputFileName(request.SignatureFileName, nameof(request.SignatureFileName));
+
         if (string.IsNullOrWhiteSpace(_settings.ReleaseKeyContainerPath))
         {
             throw new InvalidOperationException(
@@ -78,8 +81,8 @@ public sealed class LocalReleaseKeySigner : IArtifactSigner
             string signatureText = _manifestSigner.Sign(manifestBytes, releaseKey);
 
             Directory.CreateDirectory(request.OutputDirectory);
-            string manifestPath = Path.Combine(request.OutputDirectory, ManifestFileName);
-            string signaturePath = Path.Combine(request.OutputDirectory, SignatureFileName);
+            string manifestPath = Path.Combine(request.OutputDirectory, manifestFileName);
+            string signaturePath = Path.Combine(request.OutputDirectory, signatureFileName);
 
             await File.WriteAllBytesAsync(manifestPath, manifestBytes, ct);
             await File.WriteAllTextAsync(signaturePath, signatureText, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), ct);
@@ -90,6 +93,19 @@ public sealed class LocalReleaseKeySigner : IArtifactSigner
         {
             releaseKey.WipePrivateKey();
         }
+    }
+
+    private static string ValidateOutputFileName(string fileName, string paramName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName, paramName);
+        string trimmed = fileName.Trim();
+        if (!string.Equals(trimmed, Path.GetFileName(trimmed), StringComparison.Ordinal) ||
+            trimmed.Contains("..", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"Output file name '{fileName}' must not contain path segments.", paramName);
+        }
+
+        return trimmed;
     }
 
     private async Task<string> ResolveReleaseKeyIdAsync(CancellationToken ct)

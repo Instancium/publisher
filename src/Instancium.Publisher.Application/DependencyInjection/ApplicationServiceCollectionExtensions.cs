@@ -31,6 +31,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddTransient<MergeAndPublishStep>();
         services.AddTransient<CommitWorkflow>();
         services.AddTransient<ReleaseWorkflow>();
+        services.AddTransient<DocumentSigningWorkflow>();
         services.AddTransient<ReleaseRecoveryService>();
 
         return services;
