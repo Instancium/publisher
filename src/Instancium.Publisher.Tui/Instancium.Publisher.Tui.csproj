@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Instancium.Publisher</AssemblyName>
     <RootNamespace>Instancium.Publisher.Tui</RootNamespace>
-    <Version>1.8.1-rc.1</Version>
+    <Version>1.9.0-rc.1</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
