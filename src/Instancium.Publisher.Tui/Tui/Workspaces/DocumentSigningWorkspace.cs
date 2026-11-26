@@ -67,21 +67,15 @@ public sealed class DocumentSigningWorkspace : ITuiWorkspace
             AnsiConsole.WriteLine();
             NavigationBreadcrumbsBar.Render("Projects", _projectContext.Name, "Document Signing", "3/3 Sign & Publish");
 
-            DocumentSigningResult result = null!;
-            await TuiProgressReporter.RunWithLiveStatusAsync(
-                "Hashing document and signing manifest...",
-                async () =>
-                {
-                    result = await _workflow.SignDocumentAsync(
-                        new DocumentSigningRequest(
-                            sourcePath,
-                            outputDirectory,
-                            productName,
-                            version,
-                            manifestFileName,
-                            signatureFileName),
-                        ct);
-                },
+            AnsiConsole.MarkupLine("[dim]Hashing document and signing manifest...[/]");
+            DocumentSigningResult result = await _workflow.SignDocumentAsync(
+                new DocumentSigningRequest(
+                    sourcePath,
+                    outputDirectory,
+                    productName,
+                    version,
+                    manifestFileName,
+                    signatureFileName),
                 ct);
 
             RenderSignedSummary(result, productName, version);
